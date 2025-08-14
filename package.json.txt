@@ -18,6 +18,12 @@
     "dotenv": "^16.4.1"
   },
   "keywords": ["dialogflow", "webhook", "deepsek", "chatbot"],
-  "author": "Tu Nombre",
+  "author": "alexander",
   "license": "MIT"
+
 }
+# Asegúrate de estar en tu carpeta del proyecto
+cd dialogflow-deepsek-webhook
+
+# Instalar las librerías
+npm install
