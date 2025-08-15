@@ -9,6 +9,12 @@ const PORT = process.env.PORT || 3000;
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 
 app.post('/webhook', async (req, res) => {
+ // Validar que la solicitud tenga los datos necesarios
+  if (!req.body || !req.body.queryResult) {
+    return res.status(400).json({
+      fulfillmentText: 'Error: Solicitud inválida'
+    });
+  }
   try {
     const { queryResult } = req.body;
     const userMessage = queryResult.queryText;
@@ -72,5 +78,6 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
 });
+
 
 module.exports = app;
