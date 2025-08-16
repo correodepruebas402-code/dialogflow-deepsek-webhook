@@ -17,8 +17,15 @@ app.post('/webhook', async (req, res) => {
     try {
         // Obtener el texto del usuario desde Dialogflow
         const userQuery = req.body.queryResult?.queryText || "No text provided";
-        
         console.log('Query del usuario:', userQuery);
+
+        // Verificar API Key
+        if (!process.env.DEEPSEEK_API_KEY) {
+            console.error('❌ DEEPSEEK_API_KEY no configurada');
+            throw new Error('API Key not configured');
+        }
+
+        console.log('🔑 API Key configurada, haciendo llamada a DeepSeek...');
 
         // **CÓDIGO PRINCIPAL: Llamada a DeepSeek**
         const deepseekResponse = await axios.post('https://api.deepseek.com/v1/chat/completions', {
@@ -30,11 +37,14 @@ app.post('/webhook', async (req, res) => {
                 'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
                 'Content-Type': 'application/json'
             },
-            timeout: 4000 // 4 segundos para evitar timeout de Dialogflow
+            timeout: 3000 // Reducido a 3 segundos
         });
+
+        console.log('✅ Respuesta de DeepSeek recibida');
 
         // Extraer la respuesta de DeepSeek
         const aiResponse = deepseekResponse.data.choices[0].message.content;
+        console.log('💬 Respuesta AI:', aiResponse);
 
         // Formato correcto para Dialogflow V2
         const response = {
@@ -46,23 +56,28 @@ app.post('/webhook', async (req, res) => {
             }]
         };
 
-        console.log('Enviando respuesta:', response);
+        console.log('📤 Enviando respuesta a Dialogflow');
         return res.json(response);
 
     } catch (error) {
-        console.error('Error:', error.message);
+        console.error('❌ Error completo:', {
+            message: error.message,
+            code: error.code,
+            response: error.response?.data,
+            status: error.response?.status
+        });
         
         // Respuesta de error amigable
         const errorResponse = {
-            fulfillmentText: "Disculpa, estoy teniendo problemas técnicos. Intenta nuevamente en un momento.",
+            fulfillmentText: "Hola! Disculpa, tengo un pequeño problema técnico. ¿Puedes intentar de nuevo?",
             fulfillmentMessages: [{
                 text: {
-                    text: ["Disculpa, estoy teniendo problemas técnicos. Intenta nuevamente en un momento."]
+                    text: ["Hola! Disculpa, tengo un pequeño problema técnico. ¿Puedes intentar de nuevo?"]
                 }
             }]
         };
 
-        return res.status(200).json(errorResponse); // Siempre 200 para Dialogflow
+        return res.status(200).json(errorResponse);
     }
 });
 
