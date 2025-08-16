@@ -7,7 +7,14 @@ app.use(express.json());
 
 // Health check para Render
 app.get('/', (req, res) => {
-    res.status(200).send('Webhook activo! Usa POST /webhook para DialogFlow');
+    const status = {
+        status: 'active',
+        timestamp: new Date().toISOString(),
+        service: 'Dialogflow Webhook',
+        deepseek_configured: !!process.env.DEEPSEEK_API_KEY,
+        version: '2.0'
+    };
+    res.json(status);
 });
 
 // Webhook mejorado para Dialogflow
@@ -27,24 +34,46 @@ app.post('/webhook', async (req, res) => {
 
         console.log('🔑 API Key configurada, haciendo llamada a DeepSeek...');
 
-        // **CÓDIGO PRINCIPAL: Llamada a DeepSeek**
-        const deepseekResponse = await axios.post('https://api.deepseek.com/v1/chat/completions', {
-            model: "deepseek-chat",
-            messages: [{ role: "user", content: userQuery }],
-            max_tokens: 150
-        }, {
-            headers: { 
-                'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-                'Content-Type': 'application/json'
-            },
-            timeout: 3000 // Reducido a 3 segundos
-        });
+        // **CÓDIGO PRINCIPAL: Llamada a DeepSeek con fallback**
+        let aiResponse;
+        
+        try {
+            const deepseekResponse = await axios.post('https://api.deepseek.com/v1/chat/completions', {
+                model: "deepseek-chat",
+                messages: [
+                    { role: "system", content: "Responde en español de manera amigable y concisa." },
+                    { role: "user", content: userQuery }
+                ],
+                max_tokens: 100,
+                temperature: 0.7
+            }, {
+                headers: { 
+                    'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+                    'Content-Type': 'application/json'
+                },
+                timeout: 2500 // 2.5 segundos
+            });
 
-        console.log('✅ Respuesta de DeepSeek recibida');
-
-        // Extraer la respuesta de DeepSeek
-        const aiResponse = deepseekResponse.data.choices[0].message.content;
-        console.log('💬 Respuesta AI:', aiResponse);
+            console.log('✅ Respuesta de DeepSeek recibida');
+            aiResponse = deepseekResponse.data.choices[0].message.content;
+            console.log('💬 Respuesta AI:', aiResponse);
+            
+        } catch (deepseekError) {
+            console.error('⚠️ DeepSeek falló, usando respuesta local:', deepseekError.message);
+            
+            // Respuestas inteligentes locales mientras arreglamos DeepSeek
+            const responses = {
+                'hola': '¡Hola! ¿Cómo estás? Soy tu asistente virtual. ¿En qué puedo ayudarte hoy?',
+                'adios': '¡Hasta luego! Que tengas un excelente día.',
+                'gracias': '¡De nada! Siempre es un placer ayudarte.',
+                'como estas': '¡Estoy muy bien, gracias por preguntar! ¿Y tú cómo estás?',
+                'que puedes hacer': 'Puedo ayudarte con información, resolver dudas, mantener conversaciones y mucho más. ¿Qué necesitas?'
+            };
+            
+            const lowerQuery = userQuery.toLowerCase();
+            aiResponse = responses[lowerQuery] || 
+                        `Entiendo que me preguntas sobre "${userQuery}". Estoy aquí para ayudarte, aunque en este momento estoy funcionando en modo básico. ¿Puedes ser más específico sobre lo que necesitas?`;
+        }
 
         // Formato correcto para Dialogflow V2
         const response = {
@@ -93,3 +122,4 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
+
