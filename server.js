@@ -17,8 +17,12 @@ const validateDialogflow = (req, res, next) => {
 app.use(validateDialogflow);
 
 // Ruta GET para verificación inicial
+// Cambia la ruta GET a:
 app.get('/webhook', (req, res) => {
-  res.status(200).send(req.query.challenge);
+  if (!req.query.token) {
+    return res.status(400).send('Token missing');
+  }
+  res.status(200).json({ status: 'OK' });
 });
 
 // Ruta POST principal
@@ -74,5 +78,6 @@ app.post('/webhook', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
 
 
