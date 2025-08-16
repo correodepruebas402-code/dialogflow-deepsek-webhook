@@ -2,43 +2,32 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const app = express();
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 3000;
 
+// Middleware para parsear JSON
 app.use(express.json());
 
-// Middleware para validar todas las solicitudes de Dialogflow
-const validateDialogflow = (req, res, next) => {
-  if (req.method === 'GET' && req.query.token !== process.env.DIALOGFLOW_VERIFICATION_TOKEN) {
-    return res.status(403).send('Forbidden');
-  }
-  next();
-};
-
-app.use(validateDialogflow);
-
-// Ruta GET para verificación inicial
+// Verificación para Dialogflow
 app.get('/webhook', (req, res) => {
-  res.status(200).send(req.query.challenge);
+  if (req.query.token === process.env.DIALOGFLOW_VERIFICATION_TOKEN) {
+    res.status(200).send(req.query.challenge);
+  } else {
+    res.status(403).send('Forbidden');
+  }
 });
 
-// Ruta POST principal
+// Webhook principal
 app.post('/webhook', async (req, res) => {
-  console.log('Request body:', JSON.stringify(req.body, null, 2)); // Log para diagnóstico
-  
   try {
     const userQuery = req.body.queryResult.queryText;
-    
-    if (!userQuery) {
-      throw new Error('No query text provided');
-    }
+    const sessionId = req.body.session.split('/').pop();
 
-    // Llamada a DeepSeek
+    // Llamada a DeepSeek API
     const deepseekResponse = await axios.post(
-      'https://api.deepseek.com/v1/chat/completions',
+      'https://api.deepseek.com/chat',
       {
         model: "deepseek-chat",
-        messages: [{ role: "user", content: userQuery }],
-        temperature: 0.7
+        messages: [{ role: "user", content: userQuery }]
       },
       {
         headers: {
@@ -49,22 +38,21 @@ app.post('/webhook', async (req, res) => {
     );
 
     const aiResponse = deepseekResponse.data.choices[0].message.content;
-    
+
+    // Formato respuesta para Dialogflow
     const response = {
-      fulfillmentText: aiResponse,
-      fulfillmentMessages: [{ text: { text: [aiResponse] }},
-      source: "dialogflow-deepseek-webhook"
+      fulfillmentMessages: [{
+        text: {
+          text: [aiResponse]
+        }
+      }]
     };
 
-    console.log('Response:', response); // Log para diagnóstico
     res.json(response);
-
+    
   } catch (error) {
-    console.error('Error:', error.response?.data || error.message);
-    res.status(500).json({
-      fulfillmentText: "Lo siento, estoy teniendo problemas para procesar tu solicitud. Por favor intenta nuevamente.",
-      source: "fallback"
-    });
+    console.error('Error:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
