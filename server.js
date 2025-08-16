@@ -22,8 +22,11 @@ app.get('/webhook', (req, res) => {
 });
 
 // Ruta POST principal
-app.post('/webhook', async (req, res) => {
-  console.log('Request body:', JSON.stringify(req.body, null, 2)); // Log para diagnóstico
+// Reemplaza la ruta POST existente por esto:
+app.post(['/webhook', '/'], async (req, res) => {
+  console.log('Request received:', req.path);
+  // ... resto del código del webhook
+});
   
   try {
     const userQuery = req.body.queryResult.queryText;
@@ -71,3 +74,4 @@ app.post('/webhook', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
