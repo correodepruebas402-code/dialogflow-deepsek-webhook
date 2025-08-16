@@ -17,20 +17,13 @@ const validateDialogflow = (req, res, next) => {
 app.use(validateDialogflow);
 
 // Ruta GET para verificación inicial
-// Cambia la ruta GET a:
 app.get('/webhook', (req, res) => {
-  if (!req.query.token) {
-    return res.status(400).send('Token missing');
-  }
-  res.status(200).json({ status: 'OK' });
+  res.status(200).send(req.query.challenge);
 });
 
 // Ruta POST principal
-// Reemplaza la ruta POST existente por esto:
-app.post('/webhook', (req, res) => {
-  console.log('Full request body:', JSON.stringify(req.body, null, 2));
-  // ... resto del código
-});
+app.post('/webhook', async (req, res) => {
+  console.log('Request body:', JSON.stringify(req.body, null, 2)); // Log para diagnóstico
   
   try {
     const userQuery = req.body.queryResult.queryText;
@@ -78,6 +71,3 @@ app.post('/webhook', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
-
-
-
