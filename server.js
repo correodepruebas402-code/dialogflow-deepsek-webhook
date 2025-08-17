@@ -1,47 +1,94 @@
 // server.js
-require('dotenv').config();
 const express = require('express');
-const bodyParser = require('body-parser');
+const { WebhookClient } = require('dialogflow-fulfillment');
 const axios = require('axios');
+const cors = require('cors');
+const functions = require('firebase-functions'); // para leer funciones.config() en deploy
+require('dotenv').config();
 
 const app = express();
-app.use(bodyParser.json());
+app.use(cors({ origin: true }));
+app.use(express.json());
 
-app.post('/webhook', async (req, res) => {
-    try {
-        const queryText = req.body.queryResult.queryText;
+// Busca la API key: .env (local) o firebase functions config (deploy)
+const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY || (functions.config && functions.config().deepseek && functions.config().deepseek.key) || '';
 
-        // Petición a DeepSeek (o cualquier IA)
-        const response = await axios.post(
-            'https://api.deepseek.com/v1/chat/completions',
-            {
-                model: "deepseek-chat",
-                messages: [
-                    { role: "system", content: "Eres un asistente experto en perfumes y fragancias." },
-                    { role: "user", content: queryText }
-                ]
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-                    'Content-Type': 'application/json'
-                }
-            }
-        );
+process.env.DEBUG = process.env.DEBUG || 'dialogflow:debug';
 
-        const fulfillmentText = response.data.choices[0].message.content;
+// Ruta principal: Dialogflow envía POST aquí
+app.post('/', async (req, res) => {
+  const agent = new WebhookClient({ request: req, response: res });
 
-        res.json({
-            fulfillmentText
-        });
+  // Handlers básicos
+  function welcome(agent) {
+    agent.add("¡Bienvenido a American Store! ¿Quieres conocer nuestras ofertas o productos?");
+  }
 
-    } catch (error) {
-        console.error('Error en el webhook:', error);
-        res.json({ fulfillmentText: "Lo siento, ocurrió un error procesando tu solicitud." });
+  function fallback(agent) {
+    agent.add("No entendí bien lo que dijiste. ¿Puedes repetirlo?");
+  }
+
+  function ofertas(agent) {
+    agent.add("Actualmente tenemos 20% de descuento en ropa para hombre y envío gratis en todas las compras.");
+  }
+
+  function contacto(agent) {
+    agent.add("Puedes contactarnos vía WhatsApp al 3117112995 o por correo: administrador@americanstor.online");
+  }
+
+  // Handler que llama a DeepSeek
+  async function deepSeekIntent(agent) {
+    const userQuery = agent.query || (req.body && req.body.queryResult && req.body.queryResult.queryText) || '';
+
+    if (!DEEPSEEK_KEY) {
+      agent.add("Falta la clave de DeepSeek en la configuración del servidor.");
+      return;
     }
+
+    try {
+      const payload = {
+        model: "deepseek-chat",
+        messages: [
+          { role: "system", content: "Eres un asistente de ventas para American Store. Usa la base de conocimiento para responder preguntas sobre productos, ofertas y políticas." },
+          { role: "user", content: userQuery }
+        ],
+        temperature: 0.7
+      };
+
+      const dsRes = await axios.post(
+        "https://api.deepseek.com/v1/chat/completions",
+        payload,
+        {
+          headers: {
+            "Authorization": `Bearer ${DEEPSEEK_KEY}`,
+            "Content-Type": "application/json"
+          },
+          timeout: 15000
+        }
+      );
+
+      // lectura segura de la respuesta (según formato esperado)
+      const reply =
+        dsRes.data?.choices?.[0]?.message?.content ||
+        dsRes.data?.choices?.[0]?.text ||
+        "Lo siento, no obtuve una respuesta clara.";
+
+      agent.add(reply);
+    } catch (err) {
+      console.error("Error DeepSeek:", err?.response?.data || err.message || err);
+      agent.add("Lo siento, hubo un error consultando la información. Intenta de nuevo más tarde.");
+    }
+  }
+
+  // Mapear intents (usa exactamente los nombres de Intent en Dialogflow)
+  const intentMap = new Map();
+  intentMap.set("Default Welcome Intent", welcome);
+  intentMap.set("Default Fallback Intent", fallback);
+  intentMap.set("DeepSeek Intent", deepSeekIntent);     // crea este intent en Dialogflow
+  intentMap.set("Ofertas Intent", ofertas);
+  intentMap.set("Contacto Intent", contacto);
+
+  agent.handleRequest(intentMap);
 });
 
-app.listen(3000, () => {
-    console.log('Servidor escuchando en http://localhost:3000');
-});
-
+module.exports = app;
