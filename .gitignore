@@ -1,2 +1,20 @@
+# Node
 node_modules/
+npm-debug.log
+yarn-error.log
+
+# Environment
 .env
+.env.local
+.env.*.local
+
+# Firebase (optional)
+.firebase
+firebase-debug.log
+
+# IDEs
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
