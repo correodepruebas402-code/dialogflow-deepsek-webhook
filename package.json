@@ -1,11 +1,11 @@
 {
-  "name": "dialogflow-webhook",
+  "name": "american-store-chatbot",
   "version": "1.0.0",
   "dependencies": {
-    "express": "^4.18.0",
-    "axios": "^1.0.0"
+    "@google-cloud/functions-framework": "^3.0.0",
+    "axios": "^1.6.2"
   },
   "scripts": {
-    "start": "node server.js"
+    "start": "functions-framework --target=americanStoreWebhook"
   }
 }
