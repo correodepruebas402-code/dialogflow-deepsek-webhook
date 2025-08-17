@@ -87,8 +87,7 @@ app.post('/webhook', (request, response) => {
 
     let intentMap = new Map();
 
-    // *** MAPEO DE TODOS TUS INTENTS A LA MISMA FUNCIÓN ***
-    // Los nombres coinciden exactamente con tu captura de pantalla.
+    // MAPEO DE TODOS TUS INTENTS A LA MISMA FUNCIÓN
     intentMap.set('Default Fallback Intent', handleDeepseekQuery);
     intentMap.set('Consulta_Categorias', handleDeepseekQuery);
     intentMap.set('Envio_sin_cobertura', handleDeepseekQuery);
