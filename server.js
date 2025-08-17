@@ -1,20 +1,15 @@
 'use strict';
 
-// Importar las librerías necesarias
 const express = require('express');
 const axios = require('axios');
 const { WebhookClient } = require('dialogflow-fulfillment');
-require('dotenv').config(); // Carga las variables de entorno desde el archivo .env
+require('dotenv').config();
 
-// Crear la aplicación de Express
 const app = express();
-app.use(express.json()); // Middleware para parsear el cuerpo de las solicitudes como JSON
+app.use(express.json());
 
-// Obtener la clave de API desde las variables de entorno
 const deepseekApiKey = process.env.DEEPSEEK_API_KEY;
-const deepseekApiUrl = 'https://api.deepseek.com/v1/chat/completions'; // URL de la API de Deepseek
-
-// --- INICIO DE LA BASE DE CONOCIMIENTOS ---
+const deepseekApiUrl = 'https://api.deepseek.com/v1/chat/completions';
 
 const knowledgeBaseContext = `
 Eres un asistente virtual experto y amigable de la tienda AmericanStor Online. Tu objetivo es responder las preguntas de los clientes de manera clara y concisa usando únicamente la siguiente información. No inventes datos. Si no sabes la respuesta, dirige al cliente a los canales de contacto.
@@ -56,56 +51,54 @@ Eres un asistente virtual experto y amigable de la tienda AmericanStor Online. T
 Si la pregunta del cliente no se puede responder con esta información, responde amablemente: "Esa es una excelente pregunta. Para darte la información más precisa, por favor escríbenos directamente a nuestro WhatsApp o a nuestro Instagram @americanstor.online y uno de nuestros asesores te ayudará."
 `;
 
-// --- FIN DE LA BASE DE CONOCIMIENTOS ---
+async function handleDeepseekQuery(agent) {
+    const userQuery = agent.query;
+    console.log(`Consulta del usuario: ${userQuery}, Intent recibido: ${agent.intent}`);
 
-
-// Endpoint principal para el webhook de Dialogflow
-app.post('/webhook', (request, response) => {
-  const agent = new WebhookClient({ request, response });
-
-  // Función para manejar la lógica de la conversación con Deepseek
-  async function handleDeepseekQuery(agent) {
-    const userQuery = agent.query; // La pregunta del usuario
-    console.log(`Consulta del usuario: ${userQuery}`);
+    if (!deepseekApiKey) {
+        console.error('Error: La variable de entorno DEEPSEEK_API_KEY no está definida.');
+        agent.add('Lo siento, hay un problema de configuración en el servidor que me impide conectarme.');
+        return;
+    }
 
     try {
-      // Llamada a la API de Deepseek
-      const apiResponse = await axios.post(deepseekApiUrl, {
-        model: 'deepseek-chat', // O el modelo que prefieras
-        messages: [
-          { "role": "system", "content": knowledgeBaseContext },
-          { "role": "user", "content": userQuery }
-        ]
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${deepseekApiKey}`
-        }
-      });
-
-      // Extraer la respuesta del modelo
-      const botResponse = apiResponse.data.choices[0].message.content;
-
-      // Enviar la respuesta a Dialogflow
-      agent.add(botResponse);
-
+        const apiResponse = await axios.post(deepseekApiUrl, {
+            model: 'deepseek-chat',
+            messages: [
+                { "role": "system", "content": knowledgeBaseContext },
+                { "role": "user", "content": userQuery }
+            ]
+        }, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${deepseekApiKey}`
+            }
+        });
+        const botResponse = apiResponse.data.choices[0].message.content;
+        agent.add(botResponse);
     } catch (error) {
-      console.error('Error al llamar a la API de Deepseek:', error.response ? error.response.data : error.message);
-      agent.add('Lo siento, algo salió mal y no puedo procesar tu solicitud en este momento. Inténtalo de nuevo más tarde.');
+        console.error('Error al llamar a la API de Deepseek:', error.response ? error.response.data : error.message);
+        agent.add('Lo siento, algo salió mal y no puedo procesar tu solicitud en este momento. Inténtalo de nuevo más tarde.');
     }
-  }
+}
 
-  // Mapeo de intents a funciones
-  let intentMap = new Map();
-  // Este intent se activará para todas las consultas que no coincidan con otros intents definidos en Dialogflow.
-  // Asegúrate de que el "Default Fallback Intent" en Dialogflow tenga el webhook habilitado.
-  intentMap.set('Default Fallback Intent', handleDeepseekQuery);
+app.post('/webhook', (request, response) => {
+    const agent = new WebhookClient({ request, response });
 
-  agent.handleRequest(intentMap);
+    let intentMap = new Map();
+
+    // *** MAPEO DE TODOS TUS INTENTS A LA MISMA FUNCIÓN ***
+    // Los nombres coinciden exactamente con tu captura de pantalla.
+    intentMap.set('Default Fallback Intent', handleDeepseekQuery);
+    intentMap.set('Consulta_Categorias', handleDeepseekQuery);
+    intentMap.set('Envio_sin_cobertura', handleDeepseekQuery);
+    intentMap.set('Envios_info', handleDeepseekQuery);
+    intentMap.set('Perfumes_Consulta', handleDeepseekQuery);
+
+    agent.handleRequest(intentMap);
 });
 
-// Iniciar el servidor
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
-  console.log(`Servidor escuchando en el puerto ${port}`);
+    console.log(`Servidor escuchando en el puerto ${port}`);
 });
