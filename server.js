@@ -7,29 +7,31 @@ const axios = require("axios");
 const app = express();
 app.use(bodyParser.json());
 
-app.post("/webhook", (req, res) => {
-  const agent = new WebhookClient({ request: req, response: res });
+app.post('/webhook', async (req, res) => {
+  const intent = req.body.queryResult.intent.displayName;
+  const userQuery = req.body.queryResult.queryText;
 
-  console.log("🔔 Intent detectado:", agent.intent);
-  console.log("📩 Query del usuario:", agent.query);
+  let respuesta = "No entendí tu consulta 😅";
 
-  // Handler general que llama a DeepSeek
-  async function handleIntent(agent) {
-    try {
-      // Llamada a DeepSeek API
-      const apiResponse = await axios.post(
-        "https://api.deepseek.com/v1/chat/completions",
-        {
-          model: "deepseek-chat",
-          messages: [{ role: "user", content: agent.query }],
-        },
-        {
-          headers: {
-            "Authorization": `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-            "Content-Type": "application/json",
-          },
+  if (intent === "Perfumes_Consulta") {
+    // Llamada a DeepSeek
+    const deepSeekReply = await consultarDeepSeek(userQuery);
+    respuesta = deepSeekReply;
+  }
+
+  // 👇 Esta es la parte importante
+  res.json({
+    fulfillmentText: respuesta,   // <-- Dialogflow mostrará esto en el chat
+    fulfillmentMessages: [
+      {
+        text: {
+          text: [respuesta]       // <-- para compatibilidad con todos los canales
         }
-      );
+      }
+    ]
+  });
+});
+
 
       const botResponse =
         apiResponse?.data?.choices?.[0]?.message?.content ||
@@ -59,3 +61,4 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`🚀 Webhook corriendo en puerto ${PORT}`);
 });
+
