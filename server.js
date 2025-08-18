@@ -1,4 +1,4 @@
-'use strict';
+: 'use strict';
 
 const express = require('express');
 const axios = require('axios');
@@ -51,14 +51,15 @@ Eres un asistente virtual experto y amigable de la tienda AmericanStor Online. T
 Si la pregunta del cliente no se puede responder con esta información, responde amablemente: "Esa es una excelente pregunta. Para darte la información más precisa, por favor escríbenos directamente a nuestro WhatsApp o a nuestro Instagram @americanstor.online y uno de nuestros asesores te ayudará."
 `;
 
-async function handleConsultaCategorias(agent) {
-  agent.add("Vendemos ropa americana original para hombre y perfumes 1.1 para hombre y mujer.");
-}
+async function handleDeepseekQuery(agent) {
+    const userQuery = agent.query;
+    console.log(`Consulta del usuario: ${userQuery}, Intent recibido: ${agent.intent}`);
 
-function handlePerfumes(agent) {
-  agent.add("Los perfumes 1.1 son versiones tipo inspiración de fragancias originales, con buena fijación y precio accesible.");
-}
-
+    if (!deepseekApiKey) {
+        console.error('Error: La variable de entorno DEEPSEEK_API_KEY no está definida.');
+        agent.add('Lo siento, hay un problema de configuración en el servidor que me impide conectarme.');
+        return;
+    }
 
     try {
         const apiResponse = await axios.post(deepseekApiUrl, {
@@ -84,13 +85,21 @@ function handlePerfumes(agent) {
 app.post('/webhook', (request, response) => {
     const agent = new WebhookClient({ request, response });
 
-    let intentMap.set('Consulta_Categorias', handleConsultaCategorias);
-intentMap.set('Perfumes_Consulta', handlePerfumes);
-intentMap.set('Default Fallback Intent', handleDeepseekQuery);
+    let intentMap = new Map();
 
+    // MAPEO DE TODOS TUS INTENTS A LA MISMA FUNCIÓN
+    intentMap.set('Default Fallback Intent', handleDeepseekQuery);
+    intentMap.set('Consulta_Categorias', handleDeepseekQuery);
+    intentMap.set('Envio_sin_cobertura', handleDeepseekQuery);
+    intentMap.set('Envios_info', handleDeepseekQuery);
+    intentMap.set('Perfumes_Consulta', handleDeepseekQuery);
+
+    agent.handleRequest(intentMap);
+});
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
     console.log(`Servidor escuchando en el puerto ${port}`);
 });
+
 
