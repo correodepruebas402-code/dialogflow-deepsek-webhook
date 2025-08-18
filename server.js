@@ -8,16 +8,8 @@ require('dotenv').config();
 const app = express();
 app.use(express.json());
 
-// Validación inicial de variables de entorno
 const deepseekApiKey = process.env.DEEPSEEK_API_KEY;
 const deepseekApiUrl = 'https://api.deepseek.com/v1/chat/completions';
-
-if (!deepseekApiKey) {
-    console.error('❌ ERROR CRÍTICO: DEEPSEEK_API_KEY no está definida en las variables de entorno');
-    process.exit(1);
-}
-
-console.log('✅ Deepseek API Key encontrada');
 
 const knowledgeBaseContext = `
 Eres un asistente virtual experto y amigable de la tienda AmericanStor Online. Tu objetivo es responder las preguntas de los clientes de manera clara y concisa usando únicamente la siguiente información. No inventes datos. Si no sabes la respuesta, dirige al cliente a los canales de contacto.
@@ -59,14 +51,74 @@ Eres un asistente virtual experto y amigable de la tienda AmericanStor Online. T
 Si la pregunta del cliente no se puede responder con esta información, responde amablemente: "Esa es una excelente pregunta. Para darte la información más precisa, por favor escríbenos directamente a nuestro WhatsApp o a nuestro Instagram @americanstor.online y uno de nuestros asesores te ayudará."
 `;
 
-// Función mejorada con mejor manejo de errores
-function handleDeepseekQuery(agent) {
-    return new Promise(async (resolve, reject) => {
-        try {
-            const userQuery = agent.query;
-            const intentName = agent.intent;
-            
-            console.log('=== WEBHOOK REQUEST ===');
-            console.log(`📝 Consulta del usuario: ${userQuery}`);
-            console.log(`🎯 Intent recibido: ${intentName}`);
-            console.log(`🔑 API K
+async function handleDeepseekQuery(agent) {
+    const userQuery = agent.query;
+    console.log(`Consulta del usuario: ${userQuery}, Intent recibido: ${agent.intent}`);
+
+    if (!deepseekApiKey) {
+        console.error('Error: La variable de entorno DEEPSEEK_API_KEY no está definida.');
+        agent.add('Lo siento, hay un problema de configuración en el servidor que me impide conectarme.');
+        return;
+    }
+
+    try {
+        console.log('Enviando petición a Deepseek...');
+        
+        const apiResponse = await axios.post(deepseekApiUrl, {
+            model: 'deepseek-chat',
+            messages: [
+                { "role": "system", "content": knowledgeBaseContext },
+                { "role": "user", "content": userQuery }
+            ]
+        }, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${deepseekApiKey}`
+            },
+            timeout: 10000
+        });
+
+        console.log('Respuesta de Deepseek recibida');
+        
+        if (apiResponse.data && apiResponse.data.choices && apiResponse.data.choices[0] && apiResponse.data.choices[0].message) {
+            const botResponse = apiResponse.data.choices[0].message.content;
+            console.log(`Respuesta generada: ${botResponse}`);
+            agent.add(botResponse);
+        } else {
+            console.log('Estructura de respuesta inválida');
+            agent.add('Lo siento, hubo un problema procesando tu consulta. Por favor, intenta de nuevo.');
+        }
+        
+    } catch (error) {
+        console.error('Error al llamar a la API de Deepseek:', error.response ? error.response.data : error.message);
+        agent.add('Lo siento, algo salió mal y no puedo procesar tu solicitud en este momento. Inténtalo de nuevo más tarde.');
+    }
+}
+
+app.post('/webhook', (request, response) => {
+    console.log('Nueva petición webhook recibida');
+    
+    const agent = new WebhookClient({ request, response });
+
+    let intentMap = new Map();
+    intentMap.set('Default Fallback Intent', handleDeepseekQuery);
+    intentMap.set('Consulta_Categorias', handleDeepseekQuery);
+    intentMap.set('Envio_sin_cobertura', handleDeepseekQuery);
+    intentMap.set('Envios_info', handleDeepseekQuery);
+    intentMap.set('Perfumes_Consulta', handleDeepseekQuery);
+
+    agent.handleRequest(intentMap);
+});
+
+app.get('/health', (req, res) => {
+    res.json({ 
+        status: 'OK', 
+        timestamp: new Date().toISOString(),
+        deepseekApiKey: deepseekApiKey ? 'Configurada' : 'Faltante'
+    });
+});
+
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+    console.log(`Servidor escuchando en el puerto ${port}`);
+});
