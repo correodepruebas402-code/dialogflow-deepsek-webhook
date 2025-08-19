@@ -14,7 +14,7 @@ const deepseekApiUrl = 'https://api.deepseek.com/v1/chat/completions';
 console.log(`✅ API Key configurada: ${deepseekApiKey ? 'SÍ' : 'NO'}`);
 
 const knowledgeBaseContext = `
-Eres un asistente virtual experto y amigable de la tienda AmericanStor Online. Responde de manera clara, concisa y natural usando únicamente la siguiente información. Si no sabes la respuesta exacta, dirige al cliente a los canales de contacto.
+Eres un asistente virtual experto y amigable de la tienda AmericanStor Online. Responde de manera clara, concisa y natural usando únicamente la siguiente información. Siempre responde como un vendedor experto y entusiasta.
 
 **AmericanStor Online:**
 - Tienda 100% online de ropa americana original para hombre
@@ -23,106 +23,143 @@ Eres un asistente virtual experto y amigable de la tienda AmericanStor Online. R
 - Contacto: WhatsApp e Instagram @americanstor.online
 - Web: https://americanstor.online/
 
-**Productos:**
-- Ropa americana original para hombres, tallas S-XL
-- Perfumes para hombre y mujer
-- Perfumes 1.1: réplicas alta calidad, 6-10 horas duración, precio más accesible
+**CATÁLOGO DE PERFUMES:**
 
-**Envíos:**
-- A toda Colombia vía Inter Rapidísimo/Servientrega
-- Costo: $10.000-$15.000 COP
-- Tiempo: 1-3 días ciudades principales, hasta 5 días otras zonas
+**Perfumes Originales para Hombre:**
+- Dior Sauvage (fresco, cítrico, amaderado) - Muy popular
+- Hugo Boss Bottled (elegante, frutal, masculino)
+- Calvin Klein CK One (unisex, cítrico puro, fresco)
+- Versace Eros (intenso, oriental, seductor)
+- Armani Code (sofisticado, especiado, nocturno)
+- Paco Rabanne 1 Million (dorado, especiado, llamativo)
 
-**Pagos:**
-- Transferencias (Nequi, Daviplata, Bancolombia)
-- Contra entrega en algunas ciudades
-- Tarjetas débito/crédito
+**Perfumes Originales para Mujer:**
+- Chanel Coco Mademoiselle (elegante, oriental, sofisticado)
+- Victoria's Secret (variedad: Bombshell, Love, Pure Seduction)
+- Marc Jacobs Daisy (floral, fresco, juvenil)
+- Carolina Herrera Good Girl (dual, elegante, moderno)
 
-**Cambios:**
-- 5 días después de recibir, prenda sin uso con etiquetas
+**Perfumes 1.1 (Réplicas Alta Calidad):**
+- Versiones 1.1 de TODAS las marcas mencionadas
+- Duración: 6-10 horas (excelente calidad)
+- Mismas notas olfativas que los originales
+- Precio mucho más accesible
 
-IMPORTANTE: Responde siempre de forma natural y conversacional, como si fueras un vendedor amigable. Si no puedes responder algo específico, di: "Para información más detallada, contacta nuestro WhatsApp o Instagram @americanstor.online"
+**TIPOS DE FRAGANCIAS por categoría:**
+- **Cítricas/Frescas:** Dior Sauvage, CK One (energizantes, día, verano)
+- **Frutales:** Hugo Boss, Victoria's Secret Bombshell (dulces, juveniles)
+- **Orientales/Intensas:** Versace Eros, Chanel Coco (sensuales, noche)
+- **Florales:** Marc Jacobs Daisy, Carolina Herrera (delicadas, femeninas)
+- **Amaderadas:** Dior Sauvage base, Armani Code (masculinas, elegantes)
+- **Especiadas:** Paco Rabanne 1 Million, Armani Code (llamativas, invierno)
+
+**Ropa Americana Original:**
+- Camisetas, buzos, gorras de marcas reconocidas (Nike, Adidas, Supreme, etc.)
+- Tallas americanas: S, M, L, XL
+- 100% original importada de Estados Unidos
+
+**Información Comercial:**
+- **Envíos:** Toda Colombia, Inter Rapidísimo/Servientrega, $10.000-$15.000, 1-5 días
+- **Pagos:** Nequi, Daviplata, Bancolombia, contra entrega, tarjetas
+- **Cambios:** 5 días, producto sin uso con etiquetas
+- **Garantía:** Productos 100% originales
+
+INSTRUCCIONES DE RESPUESTA:
+- Siempre sé entusiasta y conocedor
+- Si preguntan por tipos específicos, menciona 2-3 opciones concretas
+- Incluye tanto originales como réplicas 1.1 como opciones
+- Si no tienes info específica de una marca: "Para confirmar esa referencia específica, escríbeme al WhatsApp"
+- Termina con llamado a la acción (WhatsApp, Instagram o web)
 `;
 
-// Respuestas inteligentes expandidas
-function getSmartResponse(query) {
+// Sistema híbrido: Respuestas inteligentes instantáneas + Deepseek como respaldo
+function getIntelligentResponse(query) {
     const queryLower = query.toLowerCase();
     
-    // Saludos
-    if (/^(hola|hello|hi|buenas|buenos|saludos|que tal)/i.test(query)) {
-        return '¡Hola! Bienvenido a AmericanStor Online, tu tienda de ropa americana original para hombre y perfumes. ¿En qué puedo ayudarte hoy?';
+    // 1. SALUDOS
+    if (/^(hola|hello|hi|buenas|buenos|saludos|que tal|hey)/i.test(query.trim())) {
+        return '¡Hola! 😊 Bienvenido a AmericanStor Online. Somos especialistas en ropa americana original y perfumes de las mejores marcas. ¿En qué puedo ayudarte hoy?';
     }
     
-    // Perfumes
-    if (queryLower.includes('perfume')) {
-        if (queryLower.includes('dior') || queryLower.includes('sauvage')) {
-            return '¡Sí! En AmericanStor Online tenemos perfumes Dior Sauvage tanto originales como réplicas 1.1 de alta calidad. Las réplicas 1.1 tienen una duración de 6-10 horas y precio más accesible que los originales. Para ver disponibilidad y precios, escríbenos al WhatsApp o visita https://americanstor.online/';
-        }
-        return '¡Perfecto! En AmericanStor Online ofrecemos perfumes para hombre y mujer. Tenemos originales importados y también perfumes 1.1 (réplicas de alta calidad) con duración de 6-10 horas y precio más accesible. Para ver nuestro catálogo completo, visita https://americanstor.online/ o escríbenos al WhatsApp.';
+    // 2. PERFUMES CÍTRICOS/FRESCOS - Respuesta específica
+    if (queryLower.includes('citrico') || queryLower.includes('citricos') || (queryLower.includes('fresco') && queryLower.includes('perfume'))) {
+        return '¡Excelente elección! 🍋 En perfumes cítricos/frescos tenemos:\n\n• **Dior Sauvage** - Cítrico-amaderado, muy fresco y masculino\n• **Calvin Klein CK One** - Cítrico puro, unisex, súper refrescante\n\nAmbos disponibles en versión **original** y **réplica 1.1** (6-10h duración). Para precios y disponibilidad, escríbeme al WhatsApp 📱';
     }
     
-    // Información de envíos
-    if (queryLower.includes('envio') || queryLower.includes('enviar') || queryLower.includes('entrega')) {
-        return 'Hacemos envíos a toda Colombia a través de Inter Rapidísimo y Servientrega. El costo es de $10.000 a $15.000 COP. A ciudades principales llega en 1-3 días hábiles, a otras zonas hasta 5 días hábiles. ¿A qué ciudad necesitas el envío?';
+    // 3. PERFUMES POR GÉNERO
+    if (queryLower.includes('perfume') && queryLower.includes('hombre')) {
+        return '¡Perfecto! 💪 Para hombre tenemos excelentes opciones:\n\n• **Dior Sauvage** (fresco, cítrico)\n• **Versace Eros** (intenso, seductor)\n• **Hugo Boss Bottled** (elegante, frutal)\n• **Armani Code** (sofisticado, nocturno)\n\nTodos disponibles originales y réplicas 1.1. ¿Te interesa alguno en particular? Escríbeme al WhatsApp para precios 📱';
     }
     
-    // Tallas
-    if (queryLower.includes('talla')) {
-        return 'Manejamos tallas americanas desde S hasta XL. Te recomendamos revisar nuestra guía de tallas en https://americanstor.online/ para encontrar tu medida perfecta. Si tienes dudas sobre tu talla, escríbenos al WhatsApp con tus medidas y te ayudamos.';
+    if (queryLower.includes('perfume') && (queryLower.includes('mujer') || queryLower.includes('dama'))) {
+        return '¡Hermoso! ✨ Para mujer tenemos:\n\n• **Chanel Coco Mademoiselle** (elegante, sofisticado)\n• **Victoria\'s Secret** (Bombshell, Love, Pure Seduction)\n• **Marc Jacobs Daisy** (floral, juvenil)\n• **Carolina Herrera Good Girl** (moderno, elegante)\n\nOriginales y réplicas 1.1 disponibles. ¿Cuál te llama la atención? Escríbeme al WhatsApp 📱';
     }
     
-    // Originalidad
-    if (queryLower.includes('original') || queryLower.includes('autentic')) {
-        return 'Sí, toda nuestra ropa es 100% original, importada directamente de Estados Unidos de marcas reconocidas. Garantizamos la autenticidad y excelente calidad de todos nuestros productos.';
+    // 4. MARCAS ESPECÍFICAS
+    if (queryLower.includes('dior')) {
+        return '¡Dior Sauvage! 🔥 Uno de nuestros más vendidos. Es fresco, cítrico con base amaderada - perfecto para cualquier ocasión. Disponible:\n\n• **Original importado** (máxima calidad)\n• **Réplica 1.1** (6-10h duración, precio accesible)\n\nPara precios actuales y disponibilidad, escríbeme al WhatsApp 📱';
     }
     
-    // Pagos
-    if (queryLower.includes('pago') || queryLower.includes('pagar') || queryLower.includes('precio')) {
-        return 'Puedes pagar por transferencias (Nequi, Daviplata, Bancolombia), contra entrega en algunas ciudades, o con tarjetas de débito/crédito a través de plataformas seguras. Para conocer precios específicos, visita https://americanstor.online/ o escríbenos al WhatsApp.';
+    if (queryLower.includes('versace')) {
+        return '¡Versace Eros! ⚡ Perfume intenso y seductor, perfecto para la noche. Disponible en:\n\n• **Original importado**\n• **Réplica 1.1** (excelente calidad)\n\nTambién manejamos otras fragancias Versace. Para catálogo completo, WhatsApp 📱';
     }
     
-    // Cambios
-    if (queryLower.includes('cambio') || queryLower.includes('devol') || queryLower.includes('cambiar')) {
-        return 'Sí, aceptamos cambios por talla o referencia en los primeros 5 días después de recibir el producto. La prenda debe estar en perfecto estado, sin uso y con etiquetas. El costo del envío para el cambio corre por cuenta del cliente.';
-    }
-    
-    // Contacto
-    if (queryLower.includes('contacto') || queryLower.includes('whatsapp') || queryLower.includes('instagram')) {
-        return 'Puedes contactarnos por WhatsApp (nuestro canal principal de atención) o Instagram @americanstor.online. También visita nuestra web https://americanstor.online/ para ver el catálogo completo.';
-    }
-    
-    // Ropa/productos
+    // 5. ROPA
     if (queryLower.includes('ropa') || queryLower.includes('camisa') || queryLower.includes('buzo') || queryLower.includes('gorra')) {
-        return 'En AmericanStor Online especializamos en ropa americana original para hombre: camisetas, buzos, gorras y más. Todas las prendas son importadas directamente de EE.UU. en tallas S-XL. Visita https://americanstor.online/ para ver nuestro catálogo completo.';
+        return '¡Ropa americana original! 👕 Importamos directamente de EE.UU.:\n\n• **Camisetas** (Nike, Adidas, Supreme, etc.)\n• **Buzos** de marcas reconocidas\n• **Gorras** originales\n• **Tallas:** S, M, L, XL\n\nTodo 100% original con etiquetas. Ver catálogo: https://americanstor.online/ o WhatsApp 📱';
     }
     
-    return null;
+    // 6. TALLAS
+    if (queryLower.includes('talla')) {
+        return 'Manejamos **tallas americanas**: S, M, L, XL 📏\n\nTe recomiendo revisar nuestra guía de tallas en https://americanstor.online/ o envíame tus medidas al WhatsApp y te ayudo a encontrar tu talla perfecta 📱';
+    }
+    
+    // 7. ENVÍOS
+    if (queryLower.includes('envio') || queryLower.includes('entrega')) {
+        return '📦 **Envíos a toda Colombia:**\n\n• Transportadoras: Inter Rapidísimo/Servientrega\n• Costo: $10.000 - $15.000\n• Tiempo: 1-3 días ciudades principales, hasta 5 días otras zonas\n\n¿A qué ciudad necesitas el envío? Te confirmo el tiempo exacto por WhatsApp 📱';
+    }
+    
+    // 8. PAGOS
+    if (queryLower.includes('pago') || queryLower.includes('precio')) {
+        return '💳 **Formas de pago:**\n\n• Transferencias: Nequi, Daviplata, Bancolombia\n• Contra entrega (ciudades disponibles)\n• Tarjetas débito/crédito\n\nPara precios específicos de productos, escríbeme al WhatsApp con lo que te interesa 📱';
+    }
+    
+    // 9. PERFUMES GENERALES
+    if (queryLower.includes('perfume') && !queryLower.includes('tipo') && !queryLower.includes('cual')) {
+        return '¡Perfumes! ✨ Somos especialistas con amplio catálogo:\n\n🔸 **Originales importados** de las mejores marcas\n🔸 **Réplicas 1.1** (alta calidad, 6-10h duración)\n\nPara hombre y mujer. ¿Buscas algo específico o prefieres ver el catálogo completo? WhatsApp 📱';
+    }
+    
+    // 10. CONTACTO/INFO GENERAL
+    if (queryLower.includes('contacto') || queryLower.includes('whatsapp') || queryLower.includes('instagram') || queryLower.includes('info')) {
+        return '📞 **Contáctanos:**\n\n• WhatsApp (atención personalizada)\n• Instagram: @americanstor.online\n• Web: https://americanstor.online/\n\n¡Estamos aquí para ayudarte! 😊';
+    }
+    
+    return null; // Si no hay respuesta inteligente, ir a Deepseek
 }
 
-async function handleDeepseekQuery(agent) {
+async function handleQuery(agent) {
     const userQuery = agent.query;
     const intentName = agent.intent || 'Unknown';
     
     console.log(`📝 Intent: ${intentName} | Consulta: "${userQuery}"`);
 
-    // 1. Primero intenta respuesta inteligente rápida
-    const quickResponse = getSmartResponse(userQuery);
-    if (quickResponse) {
-        console.log(`⚡ Respuesta rápida aplicada`);
-        agent.add(quickResponse);
+    // 1. PRIMER INTENTO: Respuesta inteligente instantánea
+    const intelligentResponse = getIntelligentResponse(userQuery);
+    if (intelligentResponse) {
+        console.log(`⚡ Respuesta inteligente aplicada`);
+        agent.add(intelligentResponse);
         return;
     }
 
-    // 2. Si no hay API key, respuesta de fallback
+    // 2. SEGUNDO INTENTO: Deepseek para consultas complejas
     if (!deepseekApiKey) {
-        console.log('❌ API Key no configurada');
-        agent.add('Gracias por contactar AmericanStor Online. Para información detallada sobre nuestros productos, contacta nuestro WhatsApp o Instagram @americanstor.online');
+        console.log('❌ API Key no configurada, usando fallback');
+        agent.add('Gracias por contactar AmericanStor Online. Para información detallada sobre nuestros productos, escríbeme al WhatsApp o Instagram @americanstor.online 📱');
         return;
     }
 
-    // 3. Llamada a Deepseek con configuración optimizada
     try {
-        console.log('🚀 Llamando Deepseek API...');
+        console.log('🚀 Consultando Deepseek...');
         
         const apiResponse = await axios.post(deepseekApiUrl, {
             model: 'deepseek-chat',
@@ -130,180 +167,106 @@ async function handleDeepseekQuery(agent) {
                 { role: 'system', content: knowledgeBaseContext },
                 { role: 'user', content: userQuery }
             ],
-            max_tokens: 150,
-            temperature: 0.2,
+            max_tokens: 200,
+            temperature: 0.3,
             top_p: 0.9
         }, {
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${deepseekApiKey}`
             },
-            timeout: 3500, // Reducido a 3.5 segundos
-            validateStatus: function (status) {
-                return status >= 200 && status < 300;
-            }
+            timeout: 3000
         });
 
         if (apiResponse.data?.choices?.[0]?.message?.content) {
             const botResponse = apiResponse.data.choices[0].message.content.trim();
-            console.log(`✅ Deepseek respondió exitosamente`);
+            console.log(`✅ Deepseek respondió`);
             agent.add(botResponse);
         } else {
-            console.log('⚠️ Respuesta vacía de Deepseek');
             throw new Error('Empty response from Deepseek');
         }
 
     } catch (error) {
-        console.error(`❌ Error Deepseek: ${error.code || error.message}`);
+        console.error(`❌ Error Deepseek: ${error.message}`);
         
-        // Respuesta de fallback inteligente basada en la consulta
-        const fallbackResponse = getFallbackResponse(userQuery);
+        // 3. TERCER INTENTO: Fallback inteligente
+        const fallbackResponse = getSmartFallback(userQuery);
+        console.log(`🔄 Usando fallback inteligente`);
         agent.add(fallbackResponse);
     }
 }
 
-function getFallbackResponse(query) {
+function getSmartFallback(query) {
     const queryLower = query.toLowerCase();
-    let response = 'Gracias por contactar AmericanStor Online. ';
     
     if (queryLower.includes('perfume')) {
-        response += 'Ofrecemos perfumes originales y réplicas 1.1 de alta calidad con duración de 6-10 horas. ';
-    } else if (queryLower.includes('envio')) {
-        response += 'Enviamos a toda Colombia por $10.000-$15.000 COP en 1-5 días hábiles. ';
-    } else if (queryLower.includes('talla')) {
-        response += 'Manejamos tallas americanas S-XL con guía en nuestra web. ';
-    } else if (queryLower.includes('pago')) {
-        response += 'Aceptamos transferencias, contra entrega y tarjetas. ';
-    } else if (queryLower.includes('original')) {
-        response += 'Toda nuestra ropa es 100% original importada de EE.UU. ';
-    } else {
-        response += 'Somos especialistas en ropa americana original y perfumes. ';
+        return 'Tenemos excelente variedad en perfumes originales e importados y réplicas 1.1 de alta calidad. Para información específica sobre la referencia que buscas, escríbeme al WhatsApp donde te puedo mostrar disponibilidad y precios actuales 📱';
     }
     
-    response += 'Para información completa y personalizada, escríbenos al WhatsApp o Instagram @americanstor.online';
-    return response;
+    if (queryLower.includes('ropa')) {
+        return 'Especialistas en ropa americana original importada de EE.UU. Para ver nuestro catálogo completo y tallas disponibles: https://americanstor.online/ o WhatsApp 📱';
+    }
+    
+    return 'Gracias por contactar AmericanStor Online 😊 Para brindarte la información más precisa sobre tu consulta, escríbeme al WhatsApp o síguenos en Instagram @americanstor.online 📱';
 }
 
-// Webhook principal
+// Webhook
 app.post('/webhook', (request, response) => {
     console.log('🔔 Webhook recibido');
-    
     const agent = new WebhookClient({ request, response });
-
-    // Mapeo de todos los intents a la misma función
-    let intentMap = new Map();
-    intentMap.set('Default Fallback Intent', handleDeepseekQuery);
-    intentMap.set('Consulta_Categorias', handleDeepseekQuery);
-    intentMap.set('Envio_sin_cobertura', handleDeepseekQuery);
-    intentMap.set('Envios_info', handleDeepseekQuery);
-    intentMap.set('Perfumes_Consulta', handleDeepseekQuery);
     
-    // Agregar más intents si existen
-    intentMap.set('Consulta_Tallas', handleDeepseekQuery);
-    intentMap.set('Consulta_Pagos', handleDeepseekQuery);
-    intentMap.set('Consulta_Cambios', handleDeepseekQuery);
-    intentMap.set('Saludos', handleDeepseekQuery);
+    let intentMap = new Map();
+    // Todos los intents van a la misma función inteligente
+    intentMap.set('Default Fallback Intent', handleQuery);
+    intentMap.set('Consulta_Categorias', handleQuery);
+    intentMap.set('Envio_sin_cobertura', handleQuery);
+    intentMap.set('Envios_info', handleQuery);
+    intentMap.set('Perfumes_Consulta', handleQuery);
+    intentMap.set('Consulta_Tallas', handleQuery);
+    intentMap.set('Consulta_Pagos', handleQuery);
+    intentMap.set('Saludos', handleQuery);
 
     agent.handleRequest(intentMap);
 });
 
-// Health check mejorado
+// Health check
 app.get('/health', async (req, res) => {
     let deepseekStatus = 'No configurada';
-    let deepseekLatency = null;
     
     if (deepseekApiKey) {
         try {
             const startTime = Date.now();
-            const testResponse = await axios.post(deepseekApiUrl, {
+            await axios.post(deepseekApiUrl, {
                 model: 'deepseek-chat',
                 messages: [{ role: 'user', content: 'Test' }],
-                max_tokens: 5,
-                temperature: 0
+                max_tokens: 5
             }, {
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${deepseekApiKey}`
+                    'Authorization': `Bearer ${deepseekApiKey}`,
+                    'Content-Type': 'application/json'
                 },
-                timeout: 3000
+                timeout: 2000
             });
             
-            deepseekLatency = Date.now() - startTime;
-            deepseekStatus = deepseekLatency < 3000 ? 'OK' : 'Lenta';
+            const latency = Date.now() - startTime;
+            deepseekStatus = `OK (${latency}ms)`;
         } catch (error) {
             deepseekStatus = `Error: ${error.message}`;
         }
     }
     
     res.json({ 
-        status: 'OK', 
+        status: 'OK',
         timestamp: new Date().toISOString(),
-        deepseekApiKey: deepseekApiKey ? 'Configurada' : 'Faltante',
-        deepseekStatus: deepseekStatus,
-        deepseekLatency: deepseekLatency,
-        optimizedForDialogflow: true,
-        quickResponsesEnabled: true
-    });
-});
-
-// Test de velocidad completo
-app.get('/speed-test', async (req, res) => {
-    const tests = [];
-    
-    // Test de respuesta rápida
-    const quickStart = Date.now();
-    const quickResponse = getSmartResponse('hola');
-    tests.push({
-        type: 'quick_response',
-        duration_ms: Date.now() - quickStart,
-        success: !!quickResponse,
-        response: quickResponse
-    });
-    
-    // Test de Deepseek si está configurado
-    if (deepseekApiKey) {
-        const deepseekStart = Date.now();
-        try {
-            const testResponse = await axios.post(deepseekApiUrl, {
-                model: 'deepseek-chat',
-                messages: [{ role: 'user', content: 'Responde solo "OK"' }],
-                max_tokens: 5,
-                temperature: 0
-            }, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${deepseekApiKey}`
-                },
-                timeout: 3500
-            });
-
-            tests.push({
-                type: 'deepseek_api',
-                duration_ms: Date.now() - deepseekStart,
-                success: true,
-                response: testResponse.data?.choices?.[0]?.message?.content
-            });
-        } catch (error) {
-            tests.push({
-                type: 'deepseek_api',
-                duration_ms: Date.now() - deepseekStart,
-                success: false,
-                error: error.message
-            });
-        }
-    }
-    
-    res.json({
-        tests: tests,
-        dialogflow_compatible: tests.every(t => t.duration_ms < 4000),
-        timestamp: new Date().toISOString()
+        deepseek: deepseekStatus,
+        intelligentResponses: 'Activadas',
+        fallbackSystem: 'Triple capa'
     });
 });
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
-    console.log(`🚀 Servidor AmericanStor optimizado en puerto ${port}`);
-    console.log(`⚡ Timeout Deepseek: 3.5 segundos`);
-    console.log(`🎯 Respuestas rápidas activadas`);
-    console.log(`📱 Health check: http://localhost:${port}/health`);
+    console.log(`🚀 AmericanStor Bot optimizado en puerto ${port}`);
+    console.log(`⚡ Sistema híbrido: Respuestas inteligentes + Deepseek + Fallback`);
+    console.log(`🎯 Cobertura: 100% de consultas con respuesta natural`);
 });
