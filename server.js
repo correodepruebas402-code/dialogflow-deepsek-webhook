@@ -3,6 +3,7 @@
 const express = require('express');
 const axios = require('axios');
 const { WebhookClient } = require('dialogflow-fulfillment');
+
 require('dotenv').config();
 
 const app = express();
@@ -10,270 +11,184 @@ app.use(express.json());
 
 const deepseekApiKey = process.env.DEEPSEEK_API_KEY;
 
-// 🔧 FUNCIONES AUXILIARES (MOVIDAS AL PRINCIPIO)
-function extractKnowledgeBaseAnswers(agent) {
-    try {
-        // 🚨 CORREGIDO: agent.request (sin guión bajo)
-        const knowledgeAnswers = agent.request.body?.queryResult?.knowledgeAnswers?.answers;
-        if (knowledgeAnswers && knowledgeAnswers.length > 0) {
-            console.log(`✅ Knowledge Base answers found: ${knowledgeAnswers.length}`);
-            return knowledgeAnswers.map(answer => answer.answer);
-        }
-        console.log('❌ No Knowledge Base answers found');
-        return null;
-    } catch (error) {
-        console.log('❌ Error extrayendo Knowledge Base:', error.message);
-        return null;
-    }
-}
+// Función para mejorar respuestas con Deepseek (movida al principio)
+async function improveResponseWithDeepseek(originalResponse, userQuery, context = '') {
+  if (!deepseekApiKey) {
+    console.log('⚠️ Deepseek API key no configurada');
+    return originalResponse;
+  }
 
-// 🤖 FUNCIÓN PARA MEJORAR CON DEEPSEEK
-async function enhanceWithDeepseek(query, knowledgeAnswer) {
-    const prompt = `Eres un experto vendedor de AmericanStor, especialista en perfumes réplica 1.1 y ropa americana original.
+  try {
+    console.log('🤖 Mejorando respuesta con Deepseek...');
+    
+    const prompt = `
+Eres un asistente de ventas especializado para AmericanStor, una tienda de productos americanos premium.
 
-Cliente pregunta: "${query}"
-
-Información de la base de conocimientos: "${knowledgeAnswer}"
+INFORMACIÓN DEL USUARIO:
+- Consulta: "${userQuery}"
+- Respuesta base: "${originalResponse}"
+- Contexto adicional: ${context}
 
 INSTRUCCIONES:
-- Responde como vendedor entusiasta y profesional
-- Mantén la información técnica pero hazla conversacional
-- Usa emojis apropiados
-- Si hablas de productos, menciona beneficios
-- Incluye llamada a la acción hacia WhatsApp si es apropiado
-- Máximo 200 palabras
+1. Mejora la respuesta base manteniendo la información original
+2. Hazla más conversacional y vendedora
+3. Incluye un emoji relevante al inicio
+4. Termina con una pregunta o call-to-action
+5. Mantén un tono amigable y profesional
+6. Máximo 150 palabras
 
-Respuesta natural:`;
+RESPUESTA MEJORADA:`;
 
+    const response = await axios.post(
+      'https://api.deepseek.com/chat/completions',
+      {
+        model: 'deepseek-chat',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 300,
+        temperature: 0.7
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${deepseekApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 15000
+      }
+    );
+
+    const improvedResponse = response.data.choices[0].message.content.trim();
+    console.log('✅ Respuesta mejorada con Deepseek aplicada');
+    return improvedResponse;
+
+  } catch (error) {
+    console.error('❌ Error con Deepseek:', error.message);
+    return originalResponse;
+  }
+}
+
+// Función para extraer respuestas del Knowledge Base
+function extractKnowledgeBaseAnswers(agent) {
+  try {
+    console.log('🔍 Extrayendo respuestas del Knowledge Base...');
+    
+    // CORRECCIÓN CRÍTICA: agent.request SIN guión bajo
+    const request = agent.request;
+    console.log('📊 Request disponible:', !!request);
+    
+    if (!request || !request.body || !request.body.queryResult) {
+      console.log('❌ Estructura de request inválida');
+      return null;
+    }
+
+    const queryResult = request.body.queryResult;
+    console.log('📋 QueryResult disponible:', !!queryResult);
+    
+    // Extraer respuestas del Knowledge Base
+    const knowledgeAnswers = queryResult.knowledgeAnswers?.answers;
+    console.log('🧠 Knowledge Answers encontradas:', knowledgeAnswers?.length || 0);
+    
+    if (knowledgeAnswers && knowledgeAnswers.length > 0) {
+      const firstAnswer = knowledgeAnswers[0];
+      console.log('📋 Primera respuesta:', firstAnswer.answer?.substring(0, 100) + '...');
+      return firstAnswer.answer;
+    }
+    
+    console.log('⚠️ No se encontraron respuestas en Knowledge Base');
+    return null;
+    
+  } catch (error) {
+    console.error('❌ Error extrayendo Knowledge Base:', error);
+    return null;
+  }
+}
+
+// Webhook principal
+app.post('/webhook', async (req, res) => {
+  console.log('\n🎯 === WEBHOOK TRIGGERED ===');
+  console.log('🎯 Intent:', req.body?.queryResult?.intent?.displayName);
+  console.log('🎯 Query:', req.body?.queryResult?.queryText);
+  
+  const agent = new WebhookClient({ request: req, response: res });
+  
+  async function defaultFallback(agent) {
     try {
-        const response = await axios.post(
-            'https://api.deepseek.com/v1/chat/completions',
-            {
-                model: 'deepseek-chat',
-                messages: [{ role: 'user', content: prompt }],
-                temperature: 0.7,
-                max_tokens: 400
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${deepseekApiKey}`,
-                    'Content-Type': 'application/json'
-                },
-                timeout: 4000
-            }
+      console.log('🔄 Procesando intent:', agent.intent);
+      
+      const userQuery = agent.query;
+      console.log('💬 Consulta del usuario:', userQuery);
+      
+      // Extraer respuesta del Knowledge Base
+      const knowledgeResponse = extractKnowledgeBaseAnswers(agent);
+      
+      if (knowledgeResponse) {
+        console.log('✅ Knowledge Base encontró respuesta');
+        
+        // Mejorar respuesta con Deepseek
+        const improvedResponse = await improveResponseWithDeepseek(
+          knowledgeResponse,
+          userQuery,
+          'AmericanStor - Productos americanos premium'
         );
-
-        return response.data.choices[0].message.content;
+        
+        console.log('📤 Enviando respuesta mejorada');
+        agent.add(improvedResponse);
+        
+      } else {
+        console.log('⚠️ No hay respuesta de Knowledge Base, usando fallback');
+        
+        const fallbackMessage = `🛍️ ¡Hola! Soy el asistente de AmericanStor. 
+        
+Aunque no tengo información específica sobre "${userQuery}", estoy aquí para ayudarte con:
+        
+• 🧴 Perfumes y fragancias premium
+• 🍫 Dulces y snacks americanos  
+• 👕 Ropa y accesorios
+• 🎮 Productos tech y gaming
+        
+¿Te gustaría saber sobre alguno de estos productos? 😊`;
+        
+        agent.add(fallbackMessage);
+      }
+      
     } catch (error) {
-        console.log('❌ Deepseek enhancement failed:', error.message);
-        throw error;
+      console.error('❌ Error en defaultFallback:', error);
+      agent.add('🤔 Disculpa, tuve un pequeño inconveniente. ¿Podrías repetir tu pregunta?');
     }
-}
+  }
 
-// 🤖 FUNCIÓN DEEPSEEK PURA (cuando no hay Knowledge Base)
-async function queryDeepseek(query) {
-    const baseKnowledge = `Eres el vendedor experto de AmericanStor, tienda especializada en:
-
-PERFUMES RÉPLICA 1.1:
-- Marcas: Dior Sauvage, Lattafa Yara, Good Girl, Jean Paul Gaultier, CK One, Paco Rabanne
-- Calidad: 95% similitud al original, 8-12 horas de duración
-- Precios: Desde $35,000 hasta $80,000
-
-ROPA AMERICANA ORIGINAL:
-- Marcas: Oakley, Adidas, Nautica, Champion, Levi's, Fila, Nike
-- Productos: Camisetas, pantalones, hoodies, gorras
-- Tallas: S, M, L, XL, XXL disponibles
-
-SERVICIOS:
-- Envío GRATIS desde $80,000 a toda Colombia
-- Garantía 30 días
-- Entrega 1-3 días hábiles
-- Pago: Efectivo, transferencia, Nequi, Daviplata
-
-Responde como vendedor entusiasta, usa emojis, y dirige hacia WhatsApp para detalles.`;
-
-    try {
-        const response = await axios.post(
-            'https://api.deepseek.com/v1/chat/completions',
-            {
-                model: 'deepseek-chat',
-                messages: [
-                    { role: 'system', content: baseKnowledge },
-                    { role: 'user', content: query }
-                ],
-                temperature: 0.7,
-                max_tokens: 400
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${deepseekApiKey}`,
-                    'Content-Type': 'application/json'
-                },
-                timeout: 4000
-            }
-        );
-
-        return response.data.choices[0].message.content;
-    } catch (error) {
-        console.log('❌ Deepseek query failed:', error.message);
-        throw error;
-    }
-}
-
-// 🛡️ RESPUESTAS DE FALLBACK INTELIGENTES
-function getFallbackResponse(query) {
-    const lowerQuery = query.toLowerCase();
-    
-    if (lowerQuery.includes('perfume') || lowerQuery.includes('fragancia')) {
-        return '¡Hola! 🌟 Tenemos increíbles perfumes réplica 1.1 como Dior Sauvage, Lattafa Yara y Good Girl con 95% similitud al original. ¿Te interesa alguno específico? Te envío detalles y precios por WhatsApp 📱✨';
-    }
-    
-    if (lowerQuery.includes('ropa') || lowerQuery.includes('camisa') || lowerQuery.includes('pantalón')) {
-        return '¡Perfecto! 👕 Manejamos ropa americana original: Oakley, Adidas, Nautica y Champion. Todas las tallas disponibles. ¿Qué tipo de prenda buscas? Te envío el catálogo completo por WhatsApp 📱🛍️';
-    }
-    
-    if (lowerQuery.includes('envío') || lowerQuery.includes('entrega')) {
-        return '¡Claro! 🚚 Envío GRATIS desde $80,000 a toda Colombia. Entrega en 1-3 días hábiles. ¿A qué ciudad sería? Te confirmo tiempo exacto por WhatsApp 📱📦';
-    }
-    
-    if (lowerQuery.includes('precio') || lowerQuery.includes('costo')) {
-        return '¡Excelente! 💰 Nuestros perfumes van desde $35,000 y ropa desde $45,000. ¡Envío gratis desde $80,000! ¿Qué productos te interesan? Te envío lista completa de precios por WhatsApp 📱💫';
-    }
-    
-    return '¡Hola! 😊 Soy tu asistente de AmericanStor. Especialistas en perfumes réplica 1.1 y ropa americana original. ¿En qué te puedo ayudar? Para atención personalizada y catálogo completo, escríbeme por WhatsApp 📱🌟';
-}
-
-// Función principal del webhook
-app.post('/webhook', async (request, response) => {
-    const agent = new WebhookClient({ request, response });
-    
-    console.log(`🎯 Intent: ${agent.intent}, Query: "${agent.query}"`);
-
-    async function handleQuery(agent) {
-        const userQuery = agent.query;
-        const intentName = agent.intent;
-        
-        console.log(`📝 Processing query: "${userQuery}" for intent: ${intentName}`);
-        
-        // 🔥 CAPTURAR KNOWLEDGE BASE RESPONSE
-        const knowledgeAnswers = extractKnowledgeBaseAnswers(agent);
-        
-        if (knowledgeAnswers && knowledgeAnswers.length > 0) {
-            console.log(`✅ Knowledge Base encontró: ${knowledgeAnswers.length} respuestas`);
-            console.log(`📋 Primera respuesta: ${knowledgeAnswers[0].substring(0, 100)}...`);
-            
-            // 🎯 USAR KNOWLEDGE BASE + DEEPSEEK PARA RESPUESTA NATURAL
-            try {
-                const naturalResponse = await enhanceWithDeepseek(userQuery, knowledgeAnswers[0]);
-                console.log('✅ Respuesta mejorada con Deepseek aplicada');
-                agent.add(naturalResponse);
-                return;
-            } catch (error) {
-                console.log('⚠️ Deepseek falló, usando Knowledge Base directa');
-                agent.add(knowledgeAnswers[0]);
-                return;
-            }
-        }
-
-        // 🚨 SI NO HAY KNOWLEDGE BASE, USAR DEEPSEEK PURO
-        try {
-            console.log('🤖 No hay Knowledge Base, consultando Deepseek...');
-            const deepseekResponse = await queryDeepseek(userQuery);
-            console.log('✅ Deepseek response generated');
-            agent.add(deepseekResponse);
-        } catch (error) {
-            console.log('⚠️ Error total, usando respuesta de fallback');
-            agent.add(getFallbackResponse(userQuery));
-        }
-    }
-
-    // 🎯 CONFIGURAR TODOS LOS INTENTS
-    const intentHandlers = new Map();
-    
-    // Lista de todos tus intents
-    const allIntents = [
-        'Default Welcome Intent',
-        'Default Fallback Intent', 
-        'Perfumes_Consulta_General',
-        'Perfumes_Por_Tipo',
-        'Perfumes_Por_Marca',
-        'Ropa_Consulta_General',
-        'Ropa_Por_Categoria',
-        'Ropa_Por_Marca',
-        'Envios_Consulta',
-        'Formas_Pago',
-        'Tallas_Consulta',
-        'Precios_Consulta',
-        'Cambios_Devoluciones'
-    ];
-
-    // Configurar el mismo handler para todos los intents
-    allIntents.forEach(intent => {
-        intentHandlers.set(intent, handleQuery);
-    });
-
-    agent.handleRequest(intentHandlers);
+  // Mapear todos los intents al mismo handler
+  const intentMap = new Map();
+  intentMap.set('Default Fallback Intent', defaultFallback);
+  intentMap.set('Perfumes_Consulta_General', defaultFallback);
+  intentMap.set('Dulces_Consulta', defaultFallback);
+  intentMap.set('Ropa_Consulta', defaultFallback);
+  intentMap.set('Productos_Generales', defaultFallback);
+  
+  agent.handleRequest(intentMap);
 });
 
-// 🔍 Health check mejorado
-app.get('/health', async (req, res) => {
-    try {
-        if (!deepseekApiKey) {
-            return res.status(500).json({ 
-                status: 'error', 
-                message: 'Deepseek API key no configurada' 
-            });
-        }
-
-        // Test rápido de Deepseek
-        const startTime = Date.now();
-        await axios.post('https://api.deepseek.com/v1/chat/completions', {
-            model: 'deepseek-chat',
-            messages: [{ role: 'user', content: 'test' }],
-            max_tokens: 10
-        }, {
-            headers: {
-                'Authorization': `Bearer ${deepseekApiKey}`,
-                'Content-Type': 'application/json'
-            },
-            timeout: 3000
-        });
-        const latency = Date.now() - startTime;
-
-        res.json({
-            status: 'healthy',
-            deepseek: 'connected',
-            latency: `${latency}ms`,
-            knowledge_base: 'integrated',
-            webhook_url: '/webhook',
-            timestamp: new Date().toISOString()
-        });
-    } catch (error) {
-        res.status(500).json({
-            status: 'degraded',
-            deepseek: 'error',
-            fallback: 'active',
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
+// Health check
+app.get('/', (req, res) => {
+  res.json({ 
+    status: 'AmericanStor Chatbot Webhook ACTIVE 🚀',
+    timestamp: new Date().toISOString(),
+    deepseekConfigured: !!deepseekApiKey
+  });
 });
 
-// 📊 Endpoint de debug para verificar estructura de requests
-app.post('/debug', express.json(), (req, res) => {
-    console.log('🔍 DEBUG REQUEST BODY:', JSON.stringify(req.body, null, 2));
-    res.json({ 
-        message: 'Debug logged', 
-        hasKnowledgeAnswers: !!req.body?.queryResult?.knowledgeAnswers 
-    });
+// Debug endpoint
+app.get('/debug', (req, res) => {
+  res.json({
+    status: 'Debug Info',
+    deepseekConfigured: !!deepseekApiKey,
+    timestamp: new Date().toISOString(),
+    version: '2.0'
+  });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor iniciado en puerto ${PORT}`);
-    console.log(`✅ Webhook URL: /webhook`);
-    console.log(`🔍 Health check: /health`);
-    console.log(`🐛 Debug endpoint: /debug`);
-    console.log(`🤖 Knowledge Base + Deepseek integrados`);
-    console.log(`📊 Priorizando conversaciones naturales y fluidas`);
+  console.log(`🚀 AmericanStor Webhook iniciado en puerto ${PORT}`);
+  console.log(`🔗 URL: https://dialogflow-deepseek-webhook.onrender.com`);
+  console.log(`🤖 Deepseek configurado: ${deepseekApiKey ? '✅' : '❌'}`);
 });
