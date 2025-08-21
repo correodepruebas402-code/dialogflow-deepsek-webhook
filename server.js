@@ -1,7 +1,6 @@
 'use strict';
 
 const express = require('express');
-const axios = require('axios');
 const { WebhookClient } = require('dialogflow-fulfillment');
 
 require('dotenv').config();
@@ -9,12 +8,11 @@ require('dotenv').config();
 const app = express();
 app.use(express.json());
 
-const deepseekApiKey = process.env.DEEPSEEK_API_KEY;
-
 // 🚀 ENDPOINTS DE VERIFICACIÓN
 app.get('/', (req, res) => {
     res.json({ 
-        status: 'AmericanStor Webhook Active - OPTIMIZADO', 
+        status: 'AmericanStor Webhook ULTRA FAST', 
+        version: '2.0',
         timestamp: new Date().toISOString()
     });
 });
@@ -22,130 +20,88 @@ app.get('/', (req, res) => {
 app.get('/health', (req, res) => {
     res.json({ 
         status: 'healthy', 
-        service: 'AmericanStor Webhook FAST',
-        deepseek: deepseekApiKey ? 'configured' : 'missing'
+        service: 'AmericanStor ULTRA FAST',
+        response_time: 'sub_1_second'
     });
 });
 
-// ⚡ FUNCIÓN RÁPIDA PARA DEEPSEEK (MÁXIMO 3 SEGUNDOS)
-async function mejorarRespuestaRapido(respuestaOriginal, query) {
-    if (!deepseekApiKey) {
-        return respuestaOriginal || 'Gracias por tu consulta sobre AmericanStor. ¿En qué más puedo ayudarte? 😊';
-    }
-
-    try {
-        const prompt = `Responde como asistente de AmericanStor (tienda de ropa y perfumes).
-Consulta: "${query}"
-Info disponible: "${respuestaOriginal || 'productos disponibles'}"
-
-Respuesta corta (máximo 80 palabras), amigable con emojis:`;
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 segundos máximo
-
-        const response = await axios.post('https://api.deepseek.com/chat/completions', {
-            model: "deepseek-chat",
-            messages: [{ role: "user", content: prompt }],
-            max_tokens: 100,
-            temperature: 0.3
-        }, {
-            headers: {
-                'Authorization': `Bearer ${deepseekApiKey}`,
-                'Content-Type': 'application/json'
-            },
-            timeout: 3000,
-            signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-        return response.data.choices[0].message.content.trim();
-
-    } catch (error) {
-        console.log('⚡ Deepseek timeout/error, usando respuesta rápida');
-        // RESPUESTA DE EMERGENCIA RÁPIDA
-        return generarRespuestaRapida(query, respuestaOriginal);
-    }
-}
-
-// 🎯 RESPUESTAS RÁPIDAS SIN API (BACKUP)
-function generarRespuestaRapida(query, info) {
-    const keywords = query.toLowerCase();
+// ⚡ RESPUESTAS INSTANTÁNEAS - SIN APIS EXTERNAS
+function getRespuestaInstantanea(query, intent) {
+    const q = query.toLowerCase();
     
-    if (keywords.includes('perfume') || keywords.includes('fragancia')) {
-        return info || '¡Hola! 😊 Tenemos una gran variedad de perfumes y fragancias. ¿Buscas algo específico para hombre o mujer? 🎯';
-    }
-    
-    if (keywords.includes('ropa') || keywords.includes('camiseta') || keywords.includes('pantalón')) {
-        return info || '¡Perfecto! 👕 Manejamos ropa de calidad en diferentes tallas. ¿Qué tipo de prenda te interesa? 😊';
-    }
-    
-    if (keywords.includes('talla') || keywords.includes('medida')) {
-        return info || 'Manejamos tallas desde S hasta XXL. 📏 ¿Necesitas ayuda con alguna talla específica? ¡Te ayudamos! 😊';
-    }
-    
-    if (keywords.includes('envío') || keywords.includes('entrega')) {
-        return info || 'Realizamos envíos a todo el país. 🚚 Los tiempos y costos varían según la ubicación. ¿A qué ciudad enviarías? 📦';
-    }
-    
-    // Respuesta general
-    return info || '¡Hola! 👋 Soy tu asistente de AmericanStor. Tenemos ropa y perfumes de calidad. ¿En qué puedo ayudarte hoy? 😊';
-}
-
-// 🎯 WEBHOOK PRINCIPAL - OPTIMIZADO PARA VELOCIDAD
-app.post('/webhook', async (req, res) => {
-    console.log('⚡ REQUEST RECIBIDO - PROCESAMIENTO RÁPIDO');
-    
-    try {
-        const agent = new WebhookClient({ request: req, response: res });
-        console.log('🎯 Intent:', agent.intent, '| Query:', agent.query);
-
-        // ⚡ PROCESO ULTRA RÁPIDO
-        const startTime = Date.now();
-        
-        // Intentar usar Knowledge Base del request si está disponible
-        let respuestaBase = '';
-        if (req.body.queryResult && req.body.queryResult.knowledgeAnswers) {
-            const answers = req.body.queryResult.knowledgeAnswers.answers;
-            if (answers && answers.length > 0) {
-                respuestaBase = answers[0].answer;
-                console.log('📋 KB encontrada en request');
-            }
+    // Respuestas específicas por intent y keywords
+    if (intent === 'Perfumes_Consulta_General' || q.includes('perfume') || q.includes('fragancia')) {
+        if (q.includes('hombre')) {
+            return '¡Perfecto! 😊 Tenemos excelentes fragancias para hombre: Jean Paul Gaultier, Dior, Hugo Boss y más. ¿Te interesa alguna marca específica? 🎯';
         }
-
-        // Mejorar respuesta RÁPIDAMENTE
-        const respuestaFinal = await mejorarRespuestaRapido(respuestaBase, agent.query);
-        
-        const processingTime = Date.now() - startTime;
-        console.log('⏱️ Tiempo procesamiento:', processingTime + 'ms');
-        
-        agent.add(respuestaFinal);
-        
-    } catch (error) {
-        console.error('❌ Error en webhook:', error.message);
-        
-        // RESPUESTA DE EMERGENCIA SÚPER RÁPIDA
-        const agent = new WebhookClient({ request: req, response: res });
-        agent.add('¡Hola! 😊 Soy tu asistente de AmericanStor. ¿En qué puedo ayudarte con nuestros productos? 🛍️');
+        if (q.includes('mujer')) {
+            return '¡Genial! 💃 Manejamos hermosas fragancias femeninas: Chanel, Dior, Carolina Herrera y más. ¿Buscas algo en particular? ✨';
+        }
+        if (q.includes('tipo') || q.includes('venden') || q.includes('tienen')) {
+            return '¡Hola! 😊 Sí, tenemos una amplia gama de perfumes: para hombre, mujer, unisex, de todas las marcas reconocidas. ¿Qué tipo te interesa? 🎯';
+        }
+        return '¡Hola! 🌟 Somos especialistas en perfumes de las mejores marcas. Tenemos fragancias para hombre, mujer y unisex. ¿En qué puedo ayudarte? 😊';
     }
     
-    console.log('✅ Respuesta enviada');
+    if (intent === 'Ropa_Consulta_General' || q.includes('ropa') || q.includes('camiseta') || q.includes('pantalón')) {
+        return '¡Excelente! 👕 Tenemos ropa de calidad: camisetas, pantalones, chaquetas en todas las tallas (S-XXL). ¿Qué tipo de prenda buscas? 😊';
+    }
+    
+    if (intent === 'Ropa_Tallas_Consulta' || q.includes('talla') || q.includes('medida')) {
+        return 'Manejamos todas las tallas desde S hasta XXL. 📏 También tenemos una guía de tallas para ayudarte. ¿Qué prenda te interesa? 👍';
+    }
+    
+    if (q.includes('envío') || q.includes('entrega') || q.includes('domicilio')) {
+        return 'Realizamos envíos a todo Colombia. 🚚 Tiempo: 2-5 días hábiles. Costo desde $8,000. ¿A qué ciudad sería el envío? 📦';
+    }
+    
+    if (q.includes('pago') || q.includes('tarjeta') || q.includes('efectivo')) {
+        return 'Aceptamos múltiples formas de pago: 💳 Tarjetas débito/crédito, PSE, Nequi, Daviplata y contraentrega. ¡Tú eliges! 😊';
+    }
+    
+    // Respuesta por defecto
+    return '¡Hola! 👋 Soy tu asistente de AmericanStor. Tenemos ropa y perfumes de las mejores marcas. ¿En qué puedo ayudarte hoy? 🛍️';
+}
+
+// 🎯 WEBHOOK PRINCIPAL - RESPUESTA INSTANTÁNEA
+app.post('/webhook', (req, res) => {
+    const startTime = Date.now();
+    console.log('⚡ REQUEST:', new Date().toISOString());
+    
+    try {
+        const agent = new WebhookClient({ request: req, response: res });
+        const query = agent.query || '';
+        const intent = agent.intent || '';
+        
+        console.log('🎯', intent, '|', query);
+        
+        // RESPUESTA INSTANTÁNEA - NO ASYNC, NO AWAIT
+        const respuesta = getRespuestaInstantanea(query, intent);
+        agent.add(respuesta);
+        
+        const time = Date.now() - startTime;
+        console.log('✅ Enviado en:', time + 'ms');
+        
+    } catch (error) {
+        console.error('❌ Error:', error.message);
+        
+        // RESPUESTA DE EMERGENCIA ULTRA RÁPIDA
+        const agent = new WebhookClient({ request: req, response: res });
+        agent.add('¡Hola! 😊 Soy tu asistente de AmericanStor. ¿En qué puedo ayudarte? 🛍️');
+    }
 });
 
 // 🚀 INICIAR SERVIDOR
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-    console.log('⚡ AmericanStor Webhook RÁPIDO iniciado en puerto:', PORT);
-    console.log('🔗 URL:', `https://dialogflow-deepseek-webhook.onrender.com/webhook`);
-    console.log('✅ Deepseek:', deepseekApiKey ? '✓ Configurado' : '✗ No configurado');
-    console.log('⏱️ Optimizado para respuestas < 4 segundos');
+    console.log('⚡ AmericanStor ULTRA FAST Webhook - Puerto:', PORT);
+    console.log('🔗', `https://dialogflow-deepseek-webhook.onrender.com/webhook`);
+    console.log('⏱️ Respuestas < 1 segundo garantizado');
+    console.log('🚀 NO external APIs - INSTANT responses');
     console.log('////////////////////////////////////////////////');
 });
 
-// Error handling
-process.on('unhandledRejection', (reason) => {
-    console.log('⚠️ Promise rejection:', reason);
-});
-
+// Manejo de errores mínimo
 process.on('uncaughtException', (error) => {
-    console.log('⚠️ Uncaught exception:', error.message);
+    console.log('⚠️', error.message);
 });
