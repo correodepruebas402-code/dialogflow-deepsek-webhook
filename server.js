@@ -11,205 +11,141 @@ app.use(express.json());
 
 const deepseekApiKey = process.env.DEEPSEEK_API_KEY;
 
-// 🚀 ENDPOINT DE SALUD - PARA VERIFICAR QUE EL SERVIDOR FUNCIONA
+// 🚀 ENDPOINTS DE VERIFICACIÓN
 app.get('/', (req, res) => {
     res.json({ 
-        status: 'AmericanStor Webhook Active', 
-        timestamp: new Date().toISOString(),
-        endpoints: ['/webhook', '/health']
+        status: 'AmericanStor Webhook Active - OPTIMIZADO', 
+        timestamp: new Date().toISOString()
     });
 });
 
 app.get('/health', (req, res) => {
     res.json({ 
         status: 'healthy', 
-        service: 'AmericanStor Webhook',
+        service: 'AmericanStor Webhook FAST',
         deepseek: deepseekApiKey ? 'configured' : 'missing'
     });
 });
 
-// 🔧 FUNCIONES PRINCIPALES ANTES DEL WEBHOOK
-async function consultarKnowledgeBase(query, sessionPath, projectId) {
-    try {
-        console.log('🔍 Consultando Knowledge Base...');
-        const sessionClient = new (require('@google-cloud/dialogflow').SessionsClient)();
-        
-        const request = {
-            session: sessionPath,
-            queryInput: {
-                text: {
-                    text: query,
-                    languageCode: 'es',
-                },
-            },
-        };
-
-        const responses = await sessionClient.detectIntent(request);
-        const result = responses[0].queryResult;
-
-        if (result.knowledgeAnswers && result.knowledgeAnswers.answers && result.knowledgeAnswers.answers.length > 0) {
-            const respuesta = result.knowledgeAnswers.answers[0].answer;
-            console.log('✅ Knowledge Base encontró respuesta');
-            return respuesta;
-        }
-
-        console.log('⚠️ Knowledge Base no encontró respuestas específicas');
-        return null;
-    } catch (error) {
-        console.error('❌ Error consultando Knowledge Base:', error);
-        return null;
-    }
-}
-
-async function mejorarRespuestaConDeepseek(respuestaKnowledge, query) {
+// ⚡ FUNCIÓN RÁPIDA PARA DEEPSEEK (MÁXIMO 3 SEGUNDOS)
+async function mejorarRespuestaRapido(respuestaOriginal, query) {
     if (!deepseekApiKey) {
-        console.log('⚠️ Deepseek API key no configurada, devolviendo respuesta original');
-        return respuestaKnowledge || 'Lo siento, no tengo información específica sobre esa consulta.';
+        return respuestaOriginal || 'Gracias por tu consulta sobre AmericanStor. ¿En qué más puedo ayudarte? 😊';
     }
 
     try {
-        console.log('🤖 Mejorando respuesta con Deepseek...');
-        
-        const prompt = `Eres un asistente de AmericanStor, una tienda online de ropa y perfumes.
-        
-Usuario preguntó: "${query}"
-Información encontrada: "${respuestaKnowledge || 'No se encontró información específica'}"
+        const prompt = `Responde como asistente de AmericanStor (tienda de ropa y perfumes).
+Consulta: "${query}"
+Info disponible: "${respuestaOriginal || 'productos disponibles'}"
 
-Responde de manera natural, amigable y comercial:
-- Usa emojis apropiados
-- Sé específico sobre los productos
-- Incluye un call-to-action
-- Mantén un tono profesional pero cercano
-- Si no hay información específica, menciona que pueden contactar para más detalles
+Respuesta corta (máximo 80 palabras), amigable con emojis:`;
 
-Responde en español, máximo 150 palabras:`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 segundos máximo
 
         const response = await axios.post('https://api.deepseek.com/chat/completions', {
             model: "deepseek-chat",
-            messages: [
-                {
-                    role: "user",
-                    content: prompt
-                }
-            ],
-            max_tokens: 200,
-            temperature: 0.7
+            messages: [{ role: "user", content: prompt }],
+            max_tokens: 100,
+            temperature: 0.3
         }, {
             headers: {
                 'Authorization': `Bearer ${deepseekApiKey}`,
                 'Content-Type': 'application/json'
             },
-            timeout: 10000
+            timeout: 3000,
+            signal: controller.signal
         });
 
-        const respuestaMejorada = response.data.choices[0].message.content.trim();
-        console.log('✅ Respuesta mejorada con Deepseek aplicada');
-        return respuestaMejorada;
+        clearTimeout(timeoutId);
+        return response.data.choices[0].message.content.trim();
 
     } catch (error) {
-        console.error('❌ Error con Deepseek:', error.message);
-        return respuestaKnowledge || 'Gracias por tu consulta. Te invitamos a explorar nuestro catálogo de productos AmericanStor. ¿Hay algo específico que te interese? 😊';
+        console.log('⚡ Deepseek timeout/error, usando respuesta rápida');
+        // RESPUESTA DE EMERGENCIA RÁPIDA
+        return generarRespuestaRapida(query, respuestaOriginal);
     }
 }
 
-// 🎯 WEBHOOK PRINCIPAL - AQUÍ ES DONDE DIALOGFLOW ENVÍA LAS CONSULTAS
-app.post('/webhook', async (req, res) => {
-    console.log('🚀 REQUEST RECIBIDO EN WEBHOOK');
-    console.log('📋 Body completo:', JSON.stringify(req.body, null, 2));
+// 🎯 RESPUESTAS RÁPIDAS SIN API (BACKUP)
+function generarRespuestaRapida(query, info) {
+    const keywords = query.toLowerCase();
+    
+    if (keywords.includes('perfume') || keywords.includes('fragancia')) {
+        return info || '¡Hola! 😊 Tenemos una gran variedad de perfumes y fragancias. ¿Buscas algo específico para hombre o mujer? 🎯';
+    }
+    
+    if (keywords.includes('ropa') || keywords.includes('camiseta') || keywords.includes('pantalón')) {
+        return info || '¡Perfecto! 👕 Manejamos ropa de calidad en diferentes tallas. ¿Qué tipo de prenda te interesa? 😊';
+    }
+    
+    if (keywords.includes('talla') || keywords.includes('medida')) {
+        return info || 'Manejamos tallas desde S hasta XXL. 📏 ¿Necesitas ayuda con alguna talla específica? ¡Te ayudamos! 😊';
+    }
+    
+    if (keywords.includes('envío') || keywords.includes('entrega')) {
+        return info || 'Realizamos envíos a todo el país. 🚚 Los tiempos y costos varían según la ubicación. ¿A qué ciudad enviarías? 📦';
+    }
+    
+    // Respuesta general
+    return info || '¡Hola! 👋 Soy tu asistente de AmericanStor. Tenemos ropa y perfumes de calidad. ¿En qué puedo ayudarte hoy? 😊';
+}
 
+// 🎯 WEBHOOK PRINCIPAL - OPTIMIZADO PARA VELOCIDAD
+app.post('/webhook', async (req, res) => {
+    console.log('⚡ REQUEST RECIBIDO - PROCESAMIENTO RÁPIDO');
+    
     try {
         const agent = new WebhookClient({ request: req, response: res });
-        console.log('🎯 Intent detectado:', agent.intent);
-        console.log('💭 Query del usuario:', agent.query);
+        console.log('🎯 Intent:', agent.intent, '| Query:', agent.query);
 
-        // ✅ FUNCIÓN PARA MANEJAR CONSULTAS GENERALES
-        async function manejarConsultaGeneral() {
-            console.log('🔄 Procesando consulta general...');
-            
-            try {
-                // Consultar Knowledge Base
-                const respuestaKB = await consultarKnowledgeBase(
-                    agent.query, 
-                    agent.session, 
-                    agent.request.body.session?.split('/')[1] || 'default-project'
-                );
-
-                if (respuestaKB) {
-                    console.log('📋 Respuesta de Knowledge Base:', respuestaKB.substring(0, 100) + '...');
-                }
-
-                // Mejorar con Deepseek
-                const respuestaFinal = await mejorarRespuestaConDeepseek(respuestaKB, agent.query);
-                
-                console.log('📤 Enviando respuesta final:', respuestaFinal.substring(0, 100) + '...');
-                agent.add(respuestaFinal);
-
-            } catch (error) {
-                console.error('❌ Error en consulta general:', error);
-                agent.add('Disculpa, hay un problema técnico. Por favor, intenta de nuevo o contáctanos directamente. 😊');
+        // ⚡ PROCESO ULTRA RÁPIDO
+        const startTime = Date.now();
+        
+        // Intentar usar Knowledge Base del request si está disponible
+        let respuestaBase = '';
+        if (req.body.queryResult && req.body.queryResult.knowledgeAnswers) {
+            const answers = req.body.queryResult.knowledgeAnswers.answers;
+            if (answers && answers.length > 0) {
+                respuestaBase = answers[0].answer;
+                console.log('📋 KB encontrada en request');
             }
         }
 
-        // 📋 MAP DE INTENTS - TODOS LOS INTENTS QUE PUEDEN USAR WEBHOOK
-        const intentHandlers = new Map();
+        // Mejorar respuesta RÁPIDAMENTE
+        const respuestaFinal = await mejorarRespuestaRapido(respuestaBase, agent.query);
         
-        // Intents específicos de AmericanStor
-        intentHandlers.set('Perfumes_Consulta_General', manejarConsultaGeneral);
-        intentHandlers.set('Ropa_Consulta_General', manejarConsultaGeneral);
-        intentHandlers.set('Ropa_Tallas_Consulta', manejarConsultaGeneral);
-        intentHandlers.set('Envios_Consulta', manejarConsultaGeneral);
-        intentHandlers.set('Pagos_Consulta', manejarConsultaGeneral);
+        const processingTime = Date.now() - startTime;
+        console.log('⏱️ Tiempo procesamiento:', processingTime + 'ms');
         
-        // Intent por defecto
-        intentHandlers.set('Default Welcome Intent', () => {
-            agent.add('¡Hola! 👋 Bienvenido a AmericanStor. Somos tu tienda online de ropa y perfumes. ¿En qué puedo ayudarte hoy? 😊');
-        });
-
-        // Intents autogenerados por Knowledge Base
-        const knowledgeIntents = [
-            'Knowledge.KnowledgeBase.NDM3MjU0NTI2MzA0MzA4NDI4OQ',
-            // Agrega aquí otros intents de Knowledge Base que veas en los logs
-        ];
+        agent.add(respuestaFinal);
         
-        knowledgeIntents.forEach(intent => {
-            intentHandlers.set(intent, manejarConsultaGeneral);
-        });
-
-        // 🎯 EJECUTAR EL INTENT CORRESPONDIENTE
-        if (intentHandlers.has(agent.intent)) {
-            console.log('✅ Ejecutando handler para intent:', agent.intent);
-            await intentHandlers.get(agent.intent)();
-        } else {
-            console.log('⚠️ Intent no reconocido:', agent.intent);
-            await manejarConsultaGeneral(); // Usar handler general por defecto
-        }
-
     } catch (error) {
-        console.error('❌ Error crítico en webhook:', error);
-        res.status(500).json({
-            fulfillmentText: 'Disculpa, hay un problema técnico. Por favor, intenta más tarde o contáctanos directamente. 📞',
-            source: 'AmericanStor Webhook'
-        });
-        return;
+        console.error('❌ Error en webhook:', error.message);
+        
+        // RESPUESTA DE EMERGENCIA SÚPER RÁPIDA
+        const agent = new WebhookClient({ request: req, response: res });
+        agent.add('¡Hola! 😊 Soy tu asistente de AmericanStor. ¿En qué puedo ayudarte con nuestros productos? 🛍️');
     }
-
-    console.log('✅ Respuesta enviada exitosamente');
+    
+    console.log('✅ Respuesta enviada');
 });
 
 // 🚀 INICIAR SERVIDOR
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-    console.log('🎯 AmericanStor Webhook iniciado en puerto:', PORT);
-    console.log('🔗 URL disponible:', `https://dialogflow-deepseek-webhook.onrender.com/webhook`);
-    console.log('✅ Deepseek configurado:', deepseekApiKey ? '✓' : '✗');
+    console.log('⚡ AmericanStor Webhook RÁPIDO iniciado en puerto:', PORT);
+    console.log('🔗 URL:', `https://dialogflow-deepseek-webhook.onrender.com/webhook`);
+    console.log('✅ Deepseek:', deepseekApiKey ? '✓ Configurado' : '✗ No configurado');
+    console.log('⏱️ Optimizado para respuestas < 4 segundos');
     console.log('////////////////////////////////////////////////');
 });
 
-// 🔧 MANEJO DE ERRORES GLOBALES
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+// Error handling
+process.on('unhandledRejection', (reason) => {
+    console.log('⚠️ Promise rejection:', reason);
 });
 
 process.on('uncaughtException', (error) => {
-    console.error('❌ Uncaught Exception:', error);
+    console.log('⚠️ Uncaught exception:', error.message);
 });
