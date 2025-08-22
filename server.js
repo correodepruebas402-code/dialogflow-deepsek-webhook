@@ -157,7 +157,7 @@ async function getSmartResponse(query, parameters = {}) {
           'Authorization': `Bearer ${deepseekApiKey}`,
           'Content-Type': 'application/json'
         },
-        timeout: 3000
+        timeout: 8000
       });
       
       const deepseekResult = response.data.choices[0].message.content.trim();
@@ -305,3 +305,4 @@ app.listen(PORT, () => {
   console.log(`🤖 Deepseek V3.1: ${deepseekApiKey ? 'CONFIGURED' : 'NOT CONFIGURED'}`);
   console.log(`📊 Brands Available: ${Object.keys(knowledgeBase.perfumes).length}`);
 });
+
