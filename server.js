@@ -20,6 +20,12 @@ const knowledgeBase = {
       precio_desde: "desde $180.000",
       disponible: true
     },
+    "hugo boss": {
+      productos: ["Bottled", "The Scent", "Boss Selection"],
+      descripcion: "Perfumes masculinos modernos y elegantes",
+      precio_desde: "desde $140.000",
+      disponible: true
+    }
     "versace": {
       productos: ["Eros", "Dylan Blue", "Bright Crystal", "Pour Homme"],
       descripcion: "Perfumes de lujo italiano con elegancia y sofisticación",
@@ -32,12 +38,12 @@ const knowledgeBase = {
       precio_desde: "desde $155.000",
       disponible: true
     },
-    "hugo boss": {
-      productos: ["Bottled", "The Scent", "Boss Selection"],
-      descripcion: "Perfumes masculinos modernos y elegantes",
-      precio_desde: "desde $140.000",
+    "burberry": {
+      productos: ["Her", "Her Elixir", "London", "Touch", "Brit"],
+      descripcion: "Fragancias británicas clásicas con elegancia contemporánea",
+      precio_desde: "desde $160.000",
       disponible: true
-    }
+    },
   },
   servicios: {
     ubicacion: "Nos encontramos en el centro comercial principal. Visítanos para conocer toda nuestra colección.",
@@ -112,9 +118,9 @@ function processQuery(query, parameters = {}) {
   return "🏪 AmericanStor - Mejores marcas de perfumes: Jean Paul Gaultier, Versace, Dolce & Gabbana, Hugo Boss desde $140.000. " + knowledgeBase.servicios.cta;
 }
 
-// 🚀 FUNCIÓN DEEPSEEK CORREGIDA (MODELO V3.1)
+// 🚀 FUNCIÓN DEEPSEEK OPTIMIZADA (MODELO V3.1)
 async function getSmartResponse(query, parameters = {}) {
-  // Intentar Deepseek con modelo actualizado
+  // Intentar Deepseek con configuración optimizada
   if (deepseekApiKey && deepseekApiKey.startsWith('sk-')) {
     try {
       console.log('🤖 Attempting Deepseek V3.1...');
@@ -129,48 +135,66 @@ async function getSmartResponse(query, parameters = {}) {
         }
       }
       
+      // Timeout más generoso y configuración optimizada
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000); // Aumentado a 5s
+      
       const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
         model: "deepseek-chat", // Modelo V3.1 por defecto
         messages: [
           {
             role: "system",
-            content: `Eres el asistente de AmericanStor, tienda especializada en perfumes originales. ${contextInfo}
+            content: `Eres el asistente comercial de AmericanStor, tienda especializada en perfumes originales. ${contextInfo}
             
             Información clave:
-            - Marcas: Jean Paul Gaultier, Versace, Dolce & Gabbana, Hugo Boss
-            - Precios: desde $140.000 hasta $250.000
-            - Todos los productos son 100% originales
-            - Siempre incluye llamada a la acción para WhatsApp
+            - Marcas disponibles: Jean Paul Gaultier, Versace, Dolce & Gabbana, Hugo Boss, Burberry
+            - Precios: desde $140.000 hasta $280.000
+            - Todos los productos son 100% originales con garantía
             
-            Responde de forma natural, amigable y comercial en máximo 40 palabras. Siempre confirma disponibilidad y guía hacia la venta.`
+            IMPORTANTE: Responde de forma natural y comercial en máximo 35 palabras. Siempre confirma disponibilidad, menciona precios y termina con llamada a la acción para WhatsApp.`
           },
           {
             role: "user",
             content: query
           }
         ],
-        max_tokens: 80,
-        temperature: 0.3,
-        top_p: 0.9
+        max_tokens: 100, // Aumentado para respuestas más completas
+        temperature: 0.4, // Ligeramente más creativo
+        top_p: 0.8,
+        stream: false // Aseguramos respuesta completa
       }, {
         headers: {
           'Authorization': `Bearer ${deepseekApiKey}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'User-Agent': 'AmericanStor-Webhook/2.0'
         },
-        timeout: 3000
+        timeout: 4500, // Timeout axios
+        signal: controller.signal
       });
       
-      const deepseekResult = response.data.choices[0].message.content.trim();
-      console.log('✅ Deepseek V3.1 response success');
-      return deepseekResult;
+      clearTimeout(timeout);
+      
+      if (response.data && response.data.choices && response.data.choices[0]) {
+        const deepseekResult = response.data.choices[0].message.content.trim();
+        console.log('✅ Deepseek V3.1 response success');
+        return deepseekResult;
+      } else {
+        throw new Error('Invalid response structure');
+      }
       
     } catch (error) {
-      console.log('⚡ Deepseek failed:', error.response?.status || error.message);
-      console.log('📚 Using enhanced knowledge base');
+      if (error.name === 'AbortError' || error.code === 'ECONNABORTED') {
+        console.log('⏰ Deepseek timeout - using knowledge base');
+      } else if (error.response?.status === 429) {
+        console.log('🚦 Deepseek rate limited - using knowledge base');
+      } else {
+        console.log('⚡ Deepseek error:', error.response?.status || error.message);
+      }
     }
   }
   
   // Fallback mejorado con parámetros
+  console.log('📚 Using enhanced knowledge base');
   return processQuery(query, parameters);
 }
 
