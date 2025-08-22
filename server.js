@@ -157,7 +157,7 @@ async function getSmartResponse(query, parameters = {}) {
           'Authorization': `Bearer ${deepseekApiKey}`,
           'Content-Type': 'application/json'
         },
-        timeout: 5000
+        timeout: 3000
       });
       
       const deepseekResult = response.data.choices[0].message.content.trim();
@@ -232,17 +232,29 @@ app.post('/webhook', async (req, res) => {
     intentMap.set('Default Welcome Intent', handleDefaultIntent);
     intentMap.set('Default Fallback Intent', handleGeneralIntent);
     
+    // 🔥 HANDLER PARA KNOWLEDGE BASE INTENTS
+    const intentName = req.body.queryResult?.intent?.displayName || '';
+    if (intentName.startsWith('Knowledge.KnowledgeBase')) {
+      console.log('🧠 Knowledge Base Intent detected, using smart handler');
+      intentMap.set(intentName, handlePerfumesIntent);
+    }
+    
     // Detectar automáticamente consultas sobre perfumes
     if (req.body.queryResult && req.body.queryResult.queryText) {
       const query = req.body.queryResult.queryText.toLowerCase();
       const intentName = req.body.queryResult.intent.displayName;
       
-      if (query.includes('perfume') || query.includes('fragancia') || 
+      // Si es un intent de Knowledge Base o contiene palabras clave de perfumes
+      if (intentName.startsWith('Knowledge.KnowledgeBase') ||
+          query.includes('perfume') || query.includes('fragancia') || 
           query.includes('jean paul') || query.includes('versace') || 
           query.includes('dolce') || query.includes('hugo') ||
-          query.includes('precio') || query.includes('disponibilidad')) {
+          query.includes('burberry') || query.includes('precio') || 
+          query.includes('disponibilidad') || query.includes('venden') ||
+          query.includes('tienen')) {
         
         if (!intentMap.has(intentName)) {
+          console.log(`🎯 Auto-mapping intent: ${intentName} to perfumes handler`);
           intentMap.set(intentName, handlePerfumesIntent);
         }
       }
@@ -252,8 +264,24 @@ app.post('/webhook', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Webhook error:', error.message);
-    const fallbackResponse = "🏪 En AmericanStor tenemos perfumes originales de las mejores marcas. ¡Contáctanos por WhatsApp para más información!";
-    res.json({ fulfillmentText: fallbackResponse });
+    console.log('🔍 Intent received:', req.body.queryResult?.intent?.displayName);
+    console.log('🔍 Query received:', req.body.queryResult?.queryText);
+    
+    // Respuesta de emergencia más específica
+    const query = req.body.queryResult?.queryText || '';
+    let fallbackResponse = "🏪 En AmericanStor tenemos perfumes originales de las mejores marcas. ¡Contáctanos por WhatsApp para más información!";
+    
+    // Si la consulta es sobre una marca específica
+    if (query.toLowerCase().includes('burberry')) {
+      fallbackResponse = "🎯 ¡Sí tenemos Burberry! Burberry Her, London, Touch desde $160.000. ¡Contáctanos por WhatsApp para separar tu favorito! 💬";
+    } else if (query.toLowerCase().includes('versace')) {
+      fallbackResponse = "✨ ¡Versace disponible! Eros, Dylan Blue, Bright Crystal desde $165.000. ¡Escríbenos por WhatsApp! 💬";
+    }
+    
+    res.json({ 
+      fulfillmentText: fallbackResponse,
+      fulfillmentMessages: [{ text: { text: [fallbackResponse] } }]
+    });
   }
 });
 
@@ -305,5 +333,3 @@ app.listen(PORT, () => {
   console.log(`🤖 Deepseek V3.1: ${deepseekApiKey ? 'CONFIGURED' : 'NOT CONFIGURED'}`);
   console.log(`📊 Brands Available: ${Object.keys(knowledgeBase.perfumes).length}`);
 });
-
-
