@@ -21,7 +21,7 @@ const emergencyResponses = {
 };
 
 // 🎯 FUNCIÓN ULTRA RÁPIDA PARA DEEPSEEK
-async function getDeepseekResponse(query, timeout = 3000) {
+async function getDeepseekResponse(query, timeout = 2000) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -31,28 +31,15 @@ async function getDeepseekResponse(query, timeout = 3000) {
       messages: [
         {
           role: "system", 
-          content: `Eres el asistente de AmericanStor, una tienda de perfumes y productos de belleza. 
-
-PRODUCTOS PRINCIPALES:
-- Perfumes Jean Paul Gaultier (Le Male, Classique, Scandal)
-- Perfumes Versace (Eros, Dylan Blue, Bright Crystal)
-- Perfumes Dolce & Gabbana (Light Blue, The One, Dolce)
-- Perfumes Hugo Boss, Carolina Herrera
-- Productos de cuidado personal y belleza
-
-INSTRUCCIONES:
-- Responde MÁXIMO en 40 palabras
-- Sé específico sobre productos disponibles
-- Siempre menciona AmericanStor
-- Si no sabes algo, invita a visitar la tienda`
+          content: "Eres AmericanStor, tienda de perfumes. Responde en MÁXIMO 25 palabras. Productos: Jean Paul Gaultier, Versace, Dolce & Gabbana, Hugo Boss."
         },
         {
           role: "user", 
           content: query
         }
       ],
-      max_tokens: 60,
-      temperature: 0.3,
+      max_tokens: 40,
+      temperature: 0.1,
       stream: false
     }, {
       headers: {
@@ -87,8 +74,8 @@ app.post('/webhook', async (req, res) => {
       const query = agent.query;
       let responseText;
 
-      // 🚀 INTENTO RÁPIDO CON DEEPSEEK (3 segundos max)
-      const deepseekResponse = await getDeepseekResponse(query, 2500);
+      // 🚀 INTENTO RÁPIDO CON DEEPSEEK (2 segundos max)
+      const deepseekResponse = await getDeepseekResponse(query, 1800);
       
       if (deepseekResponse) {
         responseText = deepseekResponse;
