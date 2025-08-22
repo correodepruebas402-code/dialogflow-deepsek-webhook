@@ -1,91 +1,185 @@
-// 🚀 FUNCIÓN DEEPSEEK OPTIMIZADA PARA V3.1
-async function getSmartResponse(query) {
-  // Primero intentamos Deepseek con configuración optimizada
+'use strict';
+
+const express = require('express');
+const axios = require('axios');
+const { WebhookClient } = require('dialogflow-fulfillment');
+
+require('dotenv').config();
+
+const app = express();
+app.use(express.json());
+
+const deepseekApiKey = process.env.DEEPSEEK_API_KEY;
+
+// 🎯 BASE DE CONOCIMIENTOS INTELIGENTE
+const knowledgeBase = {
+  perfumes: {
+    "jean paul gaultier": {
+      productos: ["Le Male", "Classique", "Scandal", "La Belle"],
+      descripcion: "Fragancias icónicas francesas con diseños únicos y aromas distintivos",
+      precio_desde: "desde $180.000",
+      disponible: true
+    },
+    "versace": {
+      productos: ["Eros", "Dylan Blue", "Bright Crystal", "Pour Homme"],
+      descripcion: "Perfumes de lujo italiano con elegancia y sofisticación",
+      precio_desde: "desde $165.000",
+      disponible: true
+    },
+    "dolce gabbana": {
+      productos: ["Light Blue", "The One", "Dolce", "K"],
+      descripcion: "Fragancias mediterráneas con estilo italiano auténtico",
+      precio_desde: "desde $155.000",
+      disponible: true
+    },
+    "hugo boss": {
+      productos: ["Bottled", "The Scent", "Boss Selection"],
+      descripcion: "Perfumes masculinos modernos y elegantes",
+      precio_desde: "desde $140.000",
+      disponible: true
+    }
+  },
+  servicios: {
+    ubicacion: "Nos encontramos en el centro comercial principal. Visítanos para conocer toda nuestra colección.",
+    horarios: "Lunes a sábado 9:00 AM - 8:00 PM, domingos 10:00 AM - 6:00 PM",
+    garantia: "Todos nuestros productos son 100% originales con garantía de autenticidad",
+    whatsapp: "¿Te interesa? Escríbenos al WhatsApp para separar tu perfume favorito.",
+    cta: "💬 ¡Contáctanos por WhatsApp para comprar!"
+  }
+};
+
+// 🧠 PROCESADOR INTELIGENTE DE CONSULTAS MEJORADO
+function processQuery(query, parameters = {}) {
+  const queryLower = query.toLowerCase();
+  
+  // Extraer marca de los parámetros de DialogFlow
+  let marca = null;
+  if (parameters && parameters['marcas_perfumes']) {
+    marca = parameters['marcas_perfumes'].toLowerCase();
+  }
+  
+  // Si no hay marca en parámetros, buscar en la consulta
+  if (!marca) {
+    for (const [marcaKey] of Object.entries(knowledgeBase.perfumes)) {
+      if (queryLower.includes(marcaKey.replace(' ', '')) || queryLower.includes(marcaKey)) {
+        marca = marcaKey;
+        break;
+      }
+    }
+  }
+  
+  // Respuesta específica por marca
+  if (marca && knowledgeBase.perfumes[marca]) {
+    const info = knowledgeBase.perfumes[marca];
+    const marcaFormatted = marca.charAt(0).toUpperCase() + marca.slice(1);
+    
+    if (queryLower.includes('precio')) {
+      return `💰 En AmericanStor manejamos ${marcaFormatted} ${info.precio_desde}. Productos estrella: ${info.productos.slice(0, 3).join(', ')}. ${info.descripcion}. ${knowledgeBase.servicios.cta}`;
+    } else if (queryLower.includes('producto') || queryLower.includes('modelo')) {
+      return `✨ Nuestros perfumes ${marcaFormatted} incluyen: ${info.productos.join(', ')}. ${info.descripcion} ${knowledgeBase.servicios.cta}`;
+    } else {
+      return `🎯 ¡Excelente elección! Sí tenemos ${marcaFormatted} ${info.precio_desde}. Destacamos: ${info.productos.slice(0, 2).join(' y ')}. ${info.descripcion} ${knowledgeBase.servicios.cta}`;
+    }
+  }
+  
+  // Consultas generales sobre perfumes
+  if (queryLower.includes('perfume') || queryLower.includes('fragancia')) {
+    if (queryLower.includes('hombre') || queryLower.includes('masculino')) {
+      return "🔥 Perfumes masculinos AmericanStor: Jean Paul Gaultier Le Male, Versace Eros, Dolce & Gabbana K, Hugo Boss Bottled. Desde $140.000. ¿Te interesa alguna marca? " + knowledgeBase.servicios.cta;
+    } else if (queryLower.includes('mujer') || queryLower.includes('femenino')) {
+      return "💖 Fragancias femeninas: Jean Paul Gaultier Classique, Versace Bright Crystal, Dolce & Gabbana Light Blue. Desde $155.000. " + knowledgeBase.servicios.cta;
+    } else if (queryLower.includes('precio') || queryLower.includes('costo')) {
+      return "💰 Precios AmericanStor: $140.000 - $250.000. Hugo Boss, Versace, Jean Paul Gaultier, Dolce & Gabbana. ¡Todos originales! " + knowledgeBase.servicios.cta;
+    } else {
+      return "🎯 AmericanStor - Perfumes originales: Jean Paul Gaultier, Versace, Dolce & Gabbana, Hugo Boss desde $140.000. ¿Masculina o femenina? " + knowledgeBase.servicios.cta;
+    }
+  }
+  
+  // Consultas sobre servicios
+  if (queryLower.includes('ubicacion') || queryLower.includes('direccion') || queryLower.includes('donde')) {
+    return "📍 " + knowledgeBase.servicios.ubicacion + " " + knowledgeBase.servicios.horarios;
+  }
+  
+  if (queryLower.includes('horario') || queryLower.includes('abierto')) {
+    return `🕐 ${knowledgeBase.servicios.horarios}. Te esperamos en AmericanStor.`;
+  }
+  
+  if (queryLower.includes('original') || queryLower.includes('garantia')) {
+    return "✅ " + knowledgeBase.servicios.garantia + " En AmericanStor solo vendemos productos auténticos.";
+  }
+  
+  // Respuesta por defecto con CTA
+  return "🏪 AmericanStor - Mejores marcas de perfumes: Jean Paul Gaultier, Versace, Dolce & Gabbana, Hugo Boss desde $140.000. " + knowledgeBase.servicios.cta;
+}
+
+// 🚀 FUNCIÓN DEEPSEEK CORREGIDA (MODELO V3.1)
+async function getSmartResponse(query, parameters = {}) {
+  // Intentar Deepseek con modelo actualizado
   if (deepseekApiKey && deepseekApiKey.startsWith('sk-')) {
     try {
-      console.log('🤖 Attempting DeepSeek V3.1 call...');
+      console.log('🤖 Attempting Deepseek V3.1...');
       
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000); // ⚡ Timeout aumentado a 5s
+      // Crear contexto enriquecido
+      let contextInfo = "";
+      if (parameters && parameters['marcas_perfumes']) {
+        const marca = parameters['marcas_perfumes'].toLowerCase();
+        if (knowledgeBase.perfumes[marca]) {
+          const info = knowledgeBase.perfumes[marca];
+          contextInfo = `Información específica de ${marca}: ${info.descripcion}, productos: ${info.productos.join(', ')}, ${info.precio_desde}. `;
+        }
+      }
       
       const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
-        model: "deepseek-chat", // ✅ Modelo correcto para V3.1
+        model: "deepseek-chat", // Modelo V3.1 por defecto
         messages: [
           {
             role: "system",
-            content: `Eres el asistente virtual de AmericanStor, tienda especializada en perfumes originales. 
-
-INFORMACIÓN DE LA TIENDA:
-- Marcas disponibles: Jean Paul Gaultier, Versace, Dolce & Gabbana, Hugo Boss
-- Precios: desde $140.000 hasta $250.000
-- Todos los productos son 100% originales con garantía
-- Ubicación: Centro comercial principal
-- Horarios: Lun-Sáb 9AM-8PM, Dom 10AM-6PM
-
-INSTRUCCIONES:
-- Responde de forma natural y conversacional
-- Siempre incluye precios cuando sea relevante
-- Menciona disponibilidad y invita a visitar la tienda
-- Máximo 40 palabras por respuesta
-- Usa un tono amigable y profesional`
+            content: `Eres el asistente de AmericanStor, tienda especializada en perfumes originales. ${contextInfo}
+            
+            Información clave:
+            - Marcas: Jean Paul Gaultier, Versace, Dolce & Gabbana, Hugo Boss
+            - Precios: desde $140.000 hasta $250.000
+            - Todos los productos son 100% originales
+            - Siempre incluye llamada a la acción para WhatsApp
+            
+            Responde de forma natural, amigable y comercial en máximo 40 palabras. Siempre confirma disponibilidad y guía hacia la venta.`
           },
           {
             role: "user",
             content: query
           }
         ],
-        max_tokens: 80, // ⚡ Aumentado para respuestas más completas
-        temperature: 0.3, // ⚡ Ligeramente más creativo
-        top_p: 0.9,
-        frequency_penalty: 0.1,
-        presence_penalty: 0.1
+        max_tokens: 80,
+        temperature: 0.3,
+        top_p: 0.9
       }, {
         headers: {
           'Authorization': `Bearer ${deepseekApiKey}`,
-          'Content-Type': 'application/json',
-          'User-Agent': 'AmericanStor-Webhook/1.0'
+          'Content-Type': 'application/json'
         },
-        timeout: 5000, // ⚡ Timeout más generoso
-        signal: controller.signal
+        timeout: 3000
       });
       
-      clearTimeout(timeout);
-      
-      if (response.data && response.data.choices && response.data.choices[0]) {
-        const deepseekResult = response.data.choices[0].message.content.trim();
-        console.log('✅ DeepSeek V3.1 response SUCCESS:', deepseekResult.substring(0, 50) + '...');
-        return deepseekResult;
-      } else {
-        throw new Error('Invalid response structure from DeepSeek');
-      }
+      const deepseekResult = response.data.choices[0].message.content.trim();
+      console.log('✅ Deepseek V3.1 response success');
+      return deepseekResult;
       
     } catch (error) {
-      // 🔍 LOGGING DETALLADO PARA DEBUGGING
-      if (error.code === 'ECONNABORTED') {
-        console.log('⏰ DeepSeek timeout - usando knowledge base');
-      } else if (error.response) {
-        console.log('🚫 DeepSeek API error:', error.response.status, error.response.data);
-      } else if (error.request) {
-        console.log('📡 DeepSeek network error:', error.message);
-      } else {
-        console.log('⚡ DeepSeek general error:', error.message);
-      }
+      console.log('⚡ Deepseek failed:', error.response?.status || error.message);
+      console.log('📚 Using enhanced knowledge base');
     }
-  } else {
-    console.log('🔑 DeepSeek API key not properly configured');
   }
   
-  // Fallback a knowledge base inteligente
-  console.log('🧠 Using smart knowledge base fallback');
-  return processQuery(query);
+  // Fallback mejorado con parámetros
+  return processQuery(query, parameters);
 }
 
-// 🎯 WEBHOOK PRINCIPAL CON MEJOR MANEJO DE INTENTS
+// 🎯 WEBHOOK PRINCIPAL MEJORADO CON PARÁMETROS
 app.post('/webhook', async (req, res) => {
   console.log('🚀 Webhook REQUEST received');
-  console.log('🎯 Intent:', req.body.queryResult?.intent?.displayName);
   console.log('📝 Query:', req.body.queryResult?.queryText);
-  console.log('🏷️ Parameters:', JSON.stringify(req.body.queryResult?.parameters || {}));
+  console.log('🎯 Intent:', req.body.queryResult?.intent?.displayName);
+  console.log('📊 Parameters:', req.body.queryResult?.parameters);
   
   const startTime = Date.now();
 
@@ -97,45 +191,40 @@ app.post('/webhook', async (req, res) => {
       const query = agent.query;
       const parameters = agent.parameters;
       
-      // Construir contexto enriquecido para DeepSeek
-      let contextualQuery = query;
-      if (parameters && Object.keys(parameters).length > 0) {
-        contextualQuery += ` [Parámetros detectados: ${JSON.stringify(parameters)}]`;
-      }
-      
-      // Obtener respuesta inteligente (Deepseek o Knowledge Base)
-      const responseText = await getSmartResponse(contextualQuery);
+      // Obtener respuesta inteligente con parámetros
+      const responseText = await getSmartResponse(query, parameters);
       
       agent.add(responseText);
       
       const duration = Date.now() - startTime;
-      console.log(`🎉 Response sent in ${duration}ms`);
+      console.log(`🎉 Smart response sent in ${duration}ms`);
     }
     
     async function handleGeneralIntent(agent) {
       console.log('🔄 Processing General Intent');
       const query = agent.query;
-      const responseText = await getSmartResponse(query);
+      const parameters = agent.parameters;
+      
+      const responseText = await getSmartResponse(query, parameters);
       agent.add(responseText);
     }
     
     async function handleDefaultIntent(agent) {
       const responses = [
-        "¡Hola! Soy tu asistente de AmericanStor. ¿Te interesa algún perfume en particular?",
-        "¡Bienvenido a AmericanStor! Tenemos las mejores fragancias desde $140.000. ¿En qué puedo ayudarte?",
-        "¡Hola! En AmericanStor manejamos perfumes originales de Jean Paul Gaultier, Versace, Dolce & Gabbana y Hugo Boss. ¿Qué buscas?"
+        "🏪 ¡Hola! Soy tu asistente de AmericanStor. ¿Te interesa algún perfume en particular?",
+        "✨ ¡Bienvenido a AmericanStor! Tenemos las mejores fragancias originales. ¿En qué puedo ayudarte?",
+        "🎯 ¡Hola! En AmericanStor manejamos perfumes originales de grandes marcas. ¿Qué buscas?"
       ];
       agent.add(responses[Math.floor(Math.random() * responses.length)]);
     }
 
-    // 🗺️ MAPEO INTELIGENTE DE INTENTS
+    // Mapeo completo de intents
     let intentMap = new Map();
     
     // Intents específicos de perfumes
     intentMap.set('Perfumes_Consulta_General', handlePerfumesIntent);
     intentMap.set('Perfumes_Marca_Especifica', handlePerfumesIntent);
     intentMap.set('Perfumes_Por_Genero', handlePerfumesIntent);
-    intentMap.set('Perfumes_Recomendacion_Personal', handlePerfumesIntent);
     intentMap.set('Precios_Consulta', handlePerfumesIntent);
     intentMap.set('Consulta_Disponibilidad_Especifica', handlePerfumesIntent);
     
@@ -143,63 +232,76 @@ app.post('/webhook', async (req, res) => {
     intentMap.set('Default Welcome Intent', handleDefaultIntent);
     intentMap.set('Default Fallback Intent', handleGeneralIntent);
     
-    // Para cualquier otro intent, usar manejo inteligente
-    const currentIntent = req.body.queryResult?.intent?.displayName;
-    if (currentIntent && !intentMap.has(currentIntent)) {
-      const query = req.body.queryResult?.queryText?.toLowerCase() || '';
+    // Detectar automáticamente consultas sobre perfumes
+    if (req.body.queryResult && req.body.queryResult.queryText) {
+      const query = req.body.queryResult.queryText.toLowerCase();
+      const intentName = req.body.queryResult.intent.displayName;
+      
       if (query.includes('perfume') || query.includes('fragancia') || 
           query.includes('jean paul') || query.includes('versace') || 
           query.includes('dolce') || query.includes('hugo') ||
-          query.includes('precio') || query.includes('costo')) {
-        intentMap.set(currentIntent, handlePerfumesIntent);
-      } else {
-        intentMap.set(currentIntent, handleGeneralIntent);
+          query.includes('precio') || query.includes('disponibilidad')) {
+        
+        if (!intentMap.has(intentName)) {
+          intentMap.set(intentName, handlePerfumesIntent);
+        }
       }
     }
 
     await agent.handleRequest(intentMap);
 
   } catch (error) {
-    console.error('❌ Webhook critical error:', error.message);
-    const fallbackResponse = "En AmericanStor tenemos perfumes originales de las mejores marcas desde $140.000. ¡Visítanos para conocer toda nuestra colección!";
-    res.json({ 
-      fulfillmentText: fallbackResponse,
-      source: 'webhook-fallback'
-    });
+    console.error('❌ Webhook error:', error.message);
+    const fallbackResponse = "🏪 En AmericanStor tenemos perfumes originales de las mejores marcas. ¡Contáctanos por WhatsApp para más información!";
+    res.json({ fulfillmentText: fallbackResponse });
   }
 });
 
-// 🏥 HEALTH CHECK CON DIAGNÓSTICO DEEPSEEK
-app.get('/health', async (req, res) => {
-  let deepseekStatus = 'not_configured';
-  
-  if (deepseekApiKey && deepseekApiKey.startsWith('sk-')) {
-    try {
-      // Test rápido de DeepSeek
-      const testResponse = await axios.post('https://api.deepseek.com/v1/chat/completions', {
-        model: "deepseek-chat",
-        messages: [{ role: "user", content: "test" }],
-        max_tokens: 5
-      }, {
-        headers: {
-          'Authorization': `Bearer ${deepseekApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 3000
-      });
-      deepseekStatus = 'healthy';
-    } catch (error) {
-      deepseekStatus = `error: ${error.response?.status || error.message}`;
-    }
-  }
-
+// 🏥 HEALTH CHECK DETALLADO
+app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
-    service: 'AmericanStor Smart Webhook v2.0',
-    deepseek_status: deepseekStatus,
-    deepseek_model: 'deepseek-chat (V3.1)',
-    knowledge_base: 'active',
-    features: ['Smart Fallback', 'Enhanced Logging', 'Context Enrichment'],
+    service: 'AmericanStor Smart Webhook V2.0',
+    deepseek: {
+      configured: !!deepseekApiKey,
+      format_valid: deepseekApiKey ? deepseekApiKey.startsWith('sk-') : false,
+      model: 'deepseek-chat (V3.1 compatible)'
+    },
+    knowledge_base: {
+      status: 'active',
+      brands: Object.keys(knowledgeBase.perfumes).length,
+      enhanced_responses: true
+    },
+    features: [
+      'Enhanced Knowledge Base',
+      'DeepSeek V3.1 Integration',
+      'Parameter Processing',
+      'Smart Fallback',
+      'CTA Integration'
+    ],
     timestamp: new Date().toISOString()
   });
+});
+
+app.get('/', (req, res) => {
+  res.json({
+    message: 'AmericanStor Smart Webhook V2.0 is running!',
+    version: '2.0.0',
+    features: [
+      'Smart Knowledge Base with CTA',
+      'Deepseek V3.1 Integration', 
+      'Fast Response <2s',
+      'Parameter-aware Processing',
+      'Enhanced Fallback System'
+    ],
+    endpoints: ['/webhook', '/health']
+  });
+});
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log(`🚀 AmericanStor Smart Webhook V2.0 running on port ${PORT}`);
+  console.log(`🧠 Enhanced Knowledge Base: ACTIVE`);
+  console.log(`🤖 Deepseek V3.1: ${deepseekApiKey ? 'CONFIGURED' : 'NOT CONFIGURED'}`);
+  console.log(`📊 Brands Available: ${Object.keys(knowledgeBase.perfumes).length}`);
 });
