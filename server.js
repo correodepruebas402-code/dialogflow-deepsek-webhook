@@ -47,218 +47,216 @@ Eres un vendedor experto, entusiasta y profesional de American Store Online con 
 IMPORTANTE: Siempre termina con una llamada a la acción clara para WhatsApp.
 `;
 
-// 🚀 FUNCIÓN DEEPSEEK MEJORADA CON MÁS CONTEXTO
-async function getSmartResponse(query, parameters = {}, dialogflowContext = '') {
+// 🚀 FUNCIÓN DEEPSEEK OPTIMIZADA PARA VELOCIDAD
+async function getSmartResponse(query, parameters = {}) {
+  // ⚡ TIMEOUT MUY CORTO para evitar que Dialogflow haga timeout
+  const DEEPSEEK_TIMEOUT = 2000; // Solo 2 segundos
+  
   if (deepseekApiKey && deepseekApiKey.startsWith('sk-')) {
     try {
-      console.log('🤖 Calling Deepseek with vendor personality...');
-      console.log('📊 Parameters received:', JSON.stringify(parameters));
-      console.log('🔄 Dialogflow context:', dialogflowContext);
+      console.log('🤖 Quick Deepseek call...');
       
-      // Construir contexto enriquecido
-      const parametersInfo = Object.keys(parameters).length > 0 
-        ? `Información detectada por Dialogflow: ${JSON.stringify(parameters)}. ` 
-        : '';
-      
-      const contextInfo = dialogflowContext 
-        ? `Contexto de conversación: ${dialogflowContext}. ` 
-        : '';
-      
-      const fullSystemPrompt = `${VENDEDOR_PERSONALIDAD}
+      // Prompt más corto para respuesta más rápida
+      const shortPrompt = `Eres el vendedor experto de AmericanStore. Responde en máximo 40 palabras con personalidad de vendedor entusiasta. Incluye emojis y termina con llamada al WhatsApp.
 
-${parametersInfo}${contextInfo}
-
-Usa toda esta información para responder como el vendedor experto de AmericanStore que eres. Aplica tu personalidad de vendedor a la información que te proporciona Dialogflow. Máximo 50 palabras.`;
+Parámetros: ${JSON.stringify(parameters)}`;
 
       const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
         model: "deepseek-chat",
         messages: [
           {
             role: "system",
-            content: fullSystemPrompt
+            content: shortPrompt
           },
           {
             role: "user", 
             content: query
           }
         ],
-        max_tokens: 100,
-        temperature: 0.4,
-        top_p: 0.9
+        max_tokens: 80, // Reducido para respuesta más rápida
+        temperature: 0.3, // Más determinístico = más rápido
+        top_p: 0.8
       }, {
         headers: {
           'Authorization': `Bearer ${deepseekApiKey}`,
           'Content-Type': 'application/json'
         },
-        timeout: 5000
+        timeout: DEEPSEEK_TIMEOUT // ⚡ TIMEOUT CORTO
       });
       
-      const deepseekResult = response.data.choices[0].message.content.trim();
-      console.log('✅ Deepseek response with personality success:', deepseekResult);
-      return deepseekResult;
+      if (response.data?.choices?.[0]?.message?.content) {
+        const result = response.data.choices[0].message.content.trim();
+        console.log('✅ Quick Deepseek success');
+        return result;
+      }
       
     } catch (error) {
-      console.log('⚡ Deepseek failed:', error.response?.status || error.message);
-      console.log('📚 Using fallback response');
+      console.log('⚡ Deepseek timeout/error (expected), using fallback');
+      // NO loggeamos el error completo para acelerar
     }
-  } else {
-    console.log('⚠️ DeepSeek not configured, using fallback');
   }
   
-  // Fallback genérico con personalidad (Dialogflow maneja el conocimiento)
-  return "¡Perfecto! Te tengo la opción ideal en AmericanStore. ¿Qué tipo de fragancia buscas? 💬 Escríbenos al WhatsApp para ayudarte mejor";
+  // 🎯 FALLBACK INTELIGENTE CON PERSONALIDAD
+  return getFallbackResponse(query, parameters);
 }
 
-// 🎯 WEBHOOK PRINCIPAL MEJORADO
+// 🎯 FALLBACK INTELIGENTE BASADO EN PARÁMETROS
+function getFallbackResponse(query, parameters = {}) {
+  const queryLower = query.toLowerCase();
+  
+  // Detectar marca de perfume en parámetros
+  if (parameters.marcas_perfumes) {
+    const marca = parameters.marcas_perfumes;
+    return `¡Excelente elección! ${marca} es una de nuestras marcas favoritas 🌟 Tenemos varios modelos disponibles. ¿Te gustaría que te reserve uno? 💬 Escríbenos al WhatsApp`;
+  }
+  
+  // Saludos
+  if (queryLower.includes('hola') || queryLower.includes('buenas')) {
+    return `¡Hola! Soy tu experto en AmericanStore 😊 ¿Buscas alguna fragancia en particular? ¡Te tengo opciones increíbles! 💬 Escríbenos al WhatsApp`;
+  }
+  
+  // Consultas de perfumes para hombre
+  if (queryLower.includes('hombre') || queryLower.includes('masculino')) {
+    return `¡Perfecto! Tenemos fragancias masculinas espectaculares 🔥 Desde clásicas hasta modernas. ¿Cuál es tu estilo? 💬 Escríbenos al WhatsApp`;
+  }
+  
+  // Consultas de perfumes para mujer  
+  if (queryLower.includes('mujer') || queryLower.includes('femenino')) {
+    return `¡Excelente! Nuestras fragancias femeninas son increíbles ✨ Elegantes y seductoras. ¿Para qué ocasión? 💬 Escríbenos al WhatsApp`;
+  }
+  
+  // Consultas de precios
+  if (queryLower.includes('precio') || queryLower.includes('costo') || queryLower.includes('cuanto')) {
+    return `¡Tenemos opciones para todos los presupuestos! 💰 Desde $80.000 hasta perfumes premium. ¿Cuál es tu rango? 💬 Escríbenos al WhatsApp`;
+  }
+  
+  // Disponibilidad
+  if (queryLower.includes('disponible') || queryLower.includes('stock') || queryLower.includes('tienen')) {
+    return `¡Justo ahora tenemos disponibilidad! 📦 Es uno de los que más se está vendiendo. ¿Te gustaría que te reserve uno? 💬 Escríbenos al WhatsApp`;
+  }
+  
+  // Default entusiasta
+  return `¡Perfecto! Te tengo la opción ideal en AmericanStore 🎯 Somos expertos en fragancias originales. ¿Qué tipo buscas? 💬 Escríbenos al WhatsApp`;
+}
+
+// 🎯 WEBHOOK OPTIMIZADO PARA VELOCIDAD
 app.post('/webhook', async (req, res) => {
+  const startTime = Date.now();
+  
   console.log('\n🚀 === WEBHOOK RECEIVED ===');
   console.log('📝 Query:', req.body.queryResult?.queryText);
   console.log('🎯 Intent:', req.body.queryResult?.intent?.displayName);
-  console.log('📊 Parameters:', JSON.stringify(req.body.queryResult?.parameters));
-  console.log('🕐 Timestamp:', new Date().toISOString());
   
   try {
     const agent = new WebhookClient({ request: req, response: res });
     
     async function handleIntent(agent) {
-      console.log('🎭 Processing with vendor personality');
       const query = agent.query;
       const parameters = agent.parameters || {};
-      const contexts = agent.contexts || [];
       
-      // Extraer información de contexto de Dialogflow
-      const contextInfo = contexts.map(c => `${c.name}: ${JSON.stringify(c.parameters)}`).join(', ');
+      console.log('🎭 Applying vendor personality...');
+      console.log('📊 Parameters:', JSON.stringify(parameters));
       
-      console.log('🧠 Applying personality layer...');
-      const responseText = await getSmartResponse(query, parameters, contextInfo);
+      // ⚡ Respuesta rápida
+      const responseText = await getSmartResponse(query, parameters);
       agent.add(responseText);
       
-      console.log('✅ Response sent with personality:', responseText);
+      const duration = Date.now() - startTime;
+      console.log(`✅ Response sent in ${duration}ms:`, responseText);
     }
     
-    // MAPEO MEJORADO: Maneja TODOS los intents automáticamente
+    // 🎯 MAPEO SIMPLE Y RÁPIDO
     let intentMap = new Map();
     const intentName = req.body.queryResult?.intent?.displayName || 'Default Fallback Intent';
     
-    // Lista de intents comunes - puedes agregar más según necesites
-    const commonIntents = [
-      'Default Welcome Intent',
-      'Default Fallback Intent',
-      'Perfumes_Consulta_General',
-      'Productos_Consulta',
-      'Precios_Consulta',
-      'Disponibilidad_Consulta'
-    ];
-    
-    // Mapear intents conocidos
-    commonIntents.forEach(intent => {
-      intentMap.set(intent, handleIntent);
-    });
-    
-    // Auto-mapear ANY intent que no esté en la lista (esto es clave)
-    if (!intentMap.has(intentName)) {
-      console.log(`🔄 Auto-mapping new intent: ${intentName}`);
-      intentMap.set(intentName, handleIntent);
-    }
+    // Manejar TODOS los intents con la misma función (más rápido)
+    intentMap.set(intentName, handleIntent);
 
     await agent.handleRequest(intentMap);
 
   } catch (error) {
     console.error('❌ Webhook error:', error.message);
-    console.error('📊 Full error:', error);
     
-    const fallbackResponse = "¡Hola! Soy tu experto en AmericanStore. Tenemos las mejores fragancias originales. ¿Qué perfume buscas? 💬 Escríbenos al WhatsApp";
+    // ⚡ RESPUESTA DE EMERGENCIA SÚPER RÁPIDA
+    const emergencyResponse = "¡Hola! Soy tu experto en AmericanStore. ¿Qué fragancia buscas? 💬 Escríbenos al WhatsApp";
     
     res.json({ 
-      fulfillmentText: fallbackResponse,
-      fulfillmentMessages: [{ text: { text: [fallbackResponse] } }]
+      fulfillmentText: emergencyResponse,
+      fulfillmentMessages: [{ text: { text: [emergencyResponse] } }]
     });
   }
 });
 
-// 🏥 HEALTH CHECK MEJORADO
+// 🏥 HEALTH CHECK RÁPIDO
 app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
-    service: 'AmericanStore Smart Webhook v3.1',
-    architecture: 'Hybrid - Dialogflow KB + Server Personality',
-    personality: {
-      active: true,
-      type: 'Expert Vendor',
-      techniques: ['Opening', 'Value Creation', 'Urgency', 'Closing']
-    },
+    service: 'AmericanStore Fast Webhook v3.2',
+    personality: 'Expert Vendor - Active',
     deepseek: {
       configured: !!deepseekApiKey,
-      valid: deepseekApiKey ? deepseekApiKey.startsWith('sk-') : false,
-      model: 'deepseek-chat'
+      timeout: '2000ms (fast)',
+      fallback: 'intelligent'
     },
-    features: [
-      'Vendor Personality Integrated', 
-      'Sales Techniques Active',
-      'DeepSeek AI Enhancement',
-      'Smart Fallback System',
-      'Auto Intent Mapping',
-      'Context Awareness'
+    optimizations: [
+      'Fast DeepSeek timeout (2s)',
+      'Intelligent fallback system', 
+      'Parameter-based responses',
+      'Reduced token usage',
+      'Single intent handler'
     ],
-    knowledge_base: 'Dialogflow Knowledge Base',
     timestamp: new Date().toISOString()
   });
 });
 
-// 🧪 ENDPOINT DE PRUEBA MEJORADO
+// 🧪 TEST ENDPOINT RÁPIDO
 app.get('/test', async (req, res) => {
-  const testQuery = req.query.q || "Hola, busco un perfume para hombre";
+  const testQuery = req.query.q || "Hola, busco un perfume";
   const testParams = req.query.params ? JSON.parse(req.query.params) : {};
   
+  const startTime = Date.now();
+  
   try {
-    const response = await getSmartResponse(testQuery, testParams, 'Test Context');
+    const response = await getSmartResponse(testQuery, testParams);
+    const duration = Date.now() - startTime;
+    
     res.json({
       query: testQuery,
       parameters: testParams,
       response: response,
+      response_time: `${duration}ms`,
       personality: 'Expert Vendor Active',
-      architecture: 'Dialogflow KB + Server Personality',
       timestamp: new Date().toISOString()
     });
   } catch (error) {
     res.json({
       error: error.message,
       query: testQuery,
-      personality: 'Fallback Active'
+      fallback: 'active'
     });
   }
 });
 
-// 📊 NUEVO: Endpoint para ver la personalidad
-app.get('/personality', (req, res) => {
-  res.json({
-    personality: VENDEDOR_PERSONALIDAD,
-    active: true,
-    version: '3.1'
-  });
-});
-
 app.get('/', (req, res) => {
   res.json({
-    message: 'AmericanStore Smart Webhook v3.1 - Expert Vendor Personality',
-    architecture: 'Hybrid: Dialogflow Knowledge Base + Server Personality',
-    personality: 'Active - Expert Vendor',
+    message: 'AmericanStore Fast Webhook v3.2 - Optimized for Speed',
+    personality: 'Expert Vendor Active',
+    optimizations: 'Fast DeepSeek + Intelligent Fallback',
     endpoints: {
       webhook: '/webhook',
       health: '/health', 
-      test: '/test?q=tu_pregunta',
-      personality: '/personality'
+      test: '/test?q=tu_pregunta'
     }
   });
 });
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log(`\n🚀 AmericanStore Smart Webhook v3.1 running on port ${PORT}`);
-  console.log(`🏗️  Architecture: Hybrid (Dialogflow KB + Server Personality)`);
+  console.log(`\n🚀 AmericanStore Fast Webhook v3.2 running on port ${PORT}`);
+  console.log(`⚡ Optimized for speed - Max 2s DeepSeek timeout`);
   console.log(`🎭 Vendor Personality: ACTIVE`);
-  console.log(`🤖 Deepseek Integration: ${deepseekApiKey ? 'CONFIGURED' : 'NOT CONFIGURED'}`);
-  console.log(`🧠 Knowledge Base: Dialogflow (recommended)`);
-  console.log(`💼 Ready to sell with expert techniques!`);
-  console.log(`\n🔗 Test it: http://localhost:${PORT}/test?q=busco%20un%20perfume`);
+  console.log(`🤖 DeepSeek: ${deepseekApiKey ? 'FAST MODE' : 'FALLBACK ONLY'}`);
+  console.log(`🧠 Intelligent Fallback System: READY`);
+  console.log(`💼 Ready for lightning-fast responses!`);
+  console.log(`\n🔗 Test: http://localhost:${PORT}/test?q=busco%20perfume%20hombre`);
 });
