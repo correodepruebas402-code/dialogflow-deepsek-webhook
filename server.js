@@ -17,26 +17,47 @@ const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 // Memoria de conversaciones (en producción usar una base de datos)
 const conversations = new Map();
 
-// Función para llamar a DeepSeek API
+// Función para llamar a DeepSeek API con timeout optimizado
 async function callDeepSeekAPI(messages, options = {}) {
     try {
-        const response = await axios.post(DEEPSEEK_API_URL, {
+        const requestConfig = {
             model: options.model || 'deepseek-chat',
             messages: messages,
-            max_tokens: options.max_tokens || 2000,
+            max_tokens: Math.min(options.max_tokens || 1500, 1500), // Limitar tokens para rapidez
             temperature: options.temperature || 0.7,
             stream: false,
             response_format: options.response_format || { type: 'text' }
-        }, {
+        };
+
+        console.log(`Calling DeepSeek API with model: ${requestConfig.model}`);
+        
+        const response = await axios.post(DEEPSEEK_API_URL, requestConfig, {
             headers: {
                 'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
                 'Content-Type': 'application/json'
-            }
+            },
+            timeout: 4000 // Timeout de 4 segundos para dejar margen a Dialogflow
         });
 
+        console.log(`DeepSeek API response received, tokens: ${response.data.usage?.total_tokens}`);
         return response.data;
     } catch (error) {
         console.error('Error calling DeepSeek API:', error.response?.data || error.message);
+        
+        if (error.code === 'ECONNABORTED') {
+            console.log('Request timed out, using fallback response');
+            // Respuesta de fallback para timeouts
+            return {
+                choices: [{
+                    message: {
+                        content: "Disculpa, la consulta está tomando más tiempo del esperado. ¿Podrías reformular tu pregunta de manera más específica?",
+                        role: "assistant"
+                    }
+                }],
+                model: requestConfig.model,
+                usage: { total_tokens: 0, prompt_tokens: 0, completion_tokens: 0 }
+            };
+        }
         throw error;
     }
 }
@@ -120,7 +141,8 @@ app.post('/webhook', async (req, res) => {
                         items: [
                             {
                                 simpleResponse: {
-                                    textToSpeech: assistantMessage,
+                                    textToSpeech: assistantMessage.length > 640 ? 
+                                        assistantMessage.substring(0, 637) + "..." : assistantMessage,
                                     displayText: assistantMessage
                                 }
                             }
@@ -132,11 +154,13 @@ app.post('/webhook', async (req, res) => {
                     usage: deepseekResponse.usage,
                     reasoning: deepseekResponse.choices[0].message.reasoning_content || null,
                     sessionId: userId,
+                    processingTime: processingTime,
                     timestamp: new Date().toISOString()
                 }
             }
         };
         
+        console.log(`Sending response: ${assistantMessage.substring(0, 100)}...`);
         res.json(fulfillmentResponse);
         
     } catch (error) {
@@ -164,36 +188,116 @@ app.post('/webhook', async (req, res) => {
     }
 });
 
-// Función para configurar opciones según el intent
+// Función para configurar opciones según el intent (optimizada para velocidad)
 function getOptionsForIntent(intentName, parameters) {
     const options = {};
     
     switch (intentName) {
         case 'reasoning.task':
-            options.model = 'deepseek-reasoner';
+            // Usar deepseek-chat en lugar de reasoner para evitar timeouts
+            options.model = 'deepseek-chat';
             options.temperature = 0.3;
+            options.max_tokens = 1200;
             break;
         case 'creative.writing':
-            options.temperature = 0.9;
-            options.max_tokens = 3000;
+            options.temperature = 0.8;
+            options.max_tokens = 1000;
             break;
         case 'json.response':
             options.response_format = { type: 'json_object' };
             options.temperature = 0.2;
+            options.max_tokens = 800;
             break;
         case 'technical.help':
             options.temperature = 0.1;
-            options.max_tokens = 4000;
+            options.max_tokens = 1200;
             break;
         default:
             options.temperature = 0.7;
-            options.max_tokens = 2000;
+            options.max_tokens = 1000;
     }
     
+    console.log(`Intent: ${intentName}, Options:`, options);
     return options;
 }
 
-// Endpoint para limpiar conversación
+// Endpoint especial para consultas que requieren razonamiento profundo
+app.post('/webhook-reasoning', async (req, res) => {
+    try {
+        // Extraer datos del formato de Dialogflow (mismo código que webhook principal)
+        const queryResult = req.body.queryResult || req.body;
+        const queryText = queryResult.queryText || queryResult.query || req.body.queryText;
+        const sessionId = req.body.session || req.body.sessionId || 'anonymous';
+        const sessionPath = req.body.session || '';
+        const userId = sessionPath.split('/').pop() || sessionId;
+        
+        console.log(`Reasoning webhook - Query: "${queryText}" from user: ${userId}`);
+        
+        if (!queryText) {
+            return res.json({
+                fulfillmentText: 'No pude entender tu consulta para análisis.',
+                fulfillmentMessages: [{
+                    text: { text: ['No pude entender tu consulta para análisis.'] }
+                }]
+            });
+        }
+
+        // Respuesta inmediata para evitar timeout
+        const immediateResponse = {
+            fulfillmentText: 'Estoy analizando tu consulta detalladamente. Un momento por favor...',
+            fulfillmentMessages: [{
+                text: { text: ['Estoy analizando tu consulta detalladamente. Un momento por favor...'] }
+            }],
+            source: 'deepseek-reasoning-webhook'
+        };
+        
+        res.json(immediateResponse);
+        
+        // Procesar con deepseek-reasoner en background (opcional: guardar resultado para consulta posterior)
+        setTimeout(async () => {
+            try {
+                const conversationHistory = [
+                    {
+                        role: 'system',
+                        content: 'Eres un asistente experto en razonamiento lógico. Analiza la consulta paso a paso y proporciona una respuesta detallada y bien fundamentada.'
+                    },
+                    {
+                        role: 'user',
+                        content: queryText
+                    }
+                ];
+                
+                const reasoningResponse = await axios.post(DEEPSEEK_API_URL, {
+                    model: 'deepseek-reasoner',
+                    messages: conversationHistory,
+                    max_tokens: 3000,
+                    temperature: 0.2
+                }, {
+                    headers: {
+                        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    timeout: 15000 // Mayor timeout para razonamiento
+                });
+                
+                console.log(`Reasoning completed for user ${userId}:`, reasoningResponse.data.choices[0].message.content.substring(0, 100));
+                // Aquí podrías guardar el resultado en una base de datos o notificar al usuario
+                
+            } catch (error) {
+                console.error('Background reasoning error:', error.message);
+            }
+        }, 100);
+        
+    } catch (error) {
+        console.error('Reasoning webhook error:', error);
+        res.json({
+            fulfillmentText: 'Hubo un error al iniciar el análisis.',
+            fulfillmentMessages: [{
+                text: { text: ['Hubo un error al iniciar el análisis.'] }
+            }]
+        });
+    }
+});
 app.post('/clear-conversation', (req, res) => {
     const { sessionId } = req.body;
     if (sessionId && conversations.has(sessionId)) {
