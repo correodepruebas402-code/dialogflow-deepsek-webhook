@@ -44,10 +44,29 @@ async function callDeepSeekAPI(messages, options = {}) {
 // Endpoint para webhook de Dialogflow
 app.post('/webhook', async (req, res) => {
     try {
-        const { queryText, sessionId, parameters, intentDisplayName } = req.body;
-        const userId = sessionId || 'anonymous';
+        // Log del payload completo para debugging
+        console.log('Dialogflow payload:', JSON.stringify(req.body, null, 2));
         
-        // Obtener historial de conversación
+        // Extraer datos del formato de Dialogflow
+        const queryResult = req.body.queryResult || req.body;
+        const queryText = queryResult.queryText || queryResult.query || req.body.queryText;
+        const sessionId = req.body.session || req.body.sessionId || 'anonymous';
+        const parameters = queryResult.parameters || req.body.parameters || {};
+        const intentDisplayName = queryResult.intent?.displayName || req.body.intentDisplayName || 'default.intent';
+        
+        // Extraer sessionId del formato completo de Dialogflow
+        const sessionPath = req.body.session || '';
+        const userId = sessionPath.split('/').pop() || sessionId;
+        // Validar que tenemos el texto de la consulta
+        if (!queryText) {
+            console.log('No query text found in request');
+            return res.json({
+                fulfillmentText: 'No pude entender tu mensaje. ¿Podrías repetirlo?',
+                fulfillmentMessages: [{
+                    text: { text: ['No pude entender tu mensaje. ¿Podrías repetirlo?'] }
+                }]
+            });
+        }
         if (!conversations.has(userId)) {
             conversations.set(userId, [
                 {
@@ -83,7 +102,7 @@ app.post('/webhook', async (req, res) => {
             conversationHistory.splice(1, 2); // Remover el par más antiguo user/assistant
         }
         
-        // Respuesta para Dialogflow
+        // Respuesta para Dialogflow (formato compatible con ES y CX)
         const fulfillmentResponse = {
             fulfillmentText: assistantMessage,
             fulfillmentMessages: [
@@ -93,11 +112,27 @@ app.post('/webhook', async (req, res) => {
                     }
                 }
             ],
+            source: 'deepseek-webhook',
             payload: {
+                google: {
+                    expectUserResponse: true,
+                    richResponse: {
+                        items: [
+                            {
+                                simpleResponse: {
+                                    textToSpeech: assistantMessage,
+                                    displayText: assistantMessage
+                                }
+                            }
+                        ]
+                    }
+                },
                 deepseek: {
                     model: deepseekResponse.model,
                     usage: deepseekResponse.usage,
-                    reasoning: deepseekResponse.choices[0].message.reasoning_content
+                    reasoning: deepseekResponse.choices[0].message.reasoning_content || null,
+                    sessionId: userId,
+                    timestamp: new Date().toISOString()
                 }
             }
         };
@@ -105,17 +140,27 @@ app.post('/webhook', async (req, res) => {
         res.json(fulfillmentResponse);
         
     } catch (error) {
-        console.error('Webhook error:', error);
-        res.json({
-            fulfillmentText: 'Lo siento, hubo un error al procesar tu solicitud. Por favor intenta nuevamente.',
+        console.error('Webhook error:', error.message);
+        console.error('Error stack:', error.stack);
+        console.error('Request body:', JSON.stringify(req.body, null, 2));
+        
+        const errorResponse = {
+            fulfillmentText: 'Lo siento, hubo un problema técnico. Por favor intenta nuevamente.',
             fulfillmentMessages: [
                 {
                     text: {
-                        text: ['Lo siento, hubo un error al procesar tu solicitud. Por favor intenta nuevamente.']
+                        text: ['Lo siento, hubo un problema técnico. Por favor intenta nuevamente.']
                     }
                 }
-            ]
-        });
+            ],
+            source: 'deepseek-webhook',
+            payload: {
+                error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+                timestamp: new Date().toISOString()
+            }
+        };
+        
+        res.json(errorResponse);
     }
 });
 
@@ -159,7 +204,37 @@ app.post('/clear-conversation', (req, res) => {
     }
 });
 
-// Endpoint de salud
+// Endpoint de prueba para simular Dialogflow
+app.post('/test-webhook', (req, res) => {
+    const testPayload = {
+        queryResult: {
+            queryText: "Hola, ¿cómo estás?",
+            parameters: {},
+            intent: {
+                displayName: "Default Welcome Intent"
+            }
+        },
+        session: "projects/test-project/agent/sessions/test-session-123"
+    };
+    
+    // Reenviar al webhook principal
+    req.body = testPayload;
+    app._router.handle({ ...req, url: '/webhook', method: 'POST' }, res, () => {});
+});
+
+// Endpoint para debugging - mostrar estructura del request
+app.post('/debug-payload', (req, res) => {
+    console.log('=== DEBUG PAYLOAD ===');
+    console.log('Headers:', req.headers);
+    console.log('Body:', JSON.stringify(req.body, null, 2));
+    console.log('===================');
+    
+    res.json({
+        message: 'Payload logged to console',
+        receivedBody: req.body,
+        timestamp: new Date().toISOString()
+    });
+});
 app.get('/health', (req, res) => {
     res.json({ 
         status: 'OK', 
