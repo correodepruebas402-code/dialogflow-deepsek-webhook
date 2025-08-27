@@ -1,264 +1,229 @@
-'use strict';
-
 const express = require('express');
 const axios = require('axios');
-const { WebhookClient } = require('dialogflow-fulfillment');
-
+const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(cors());
 app.use(express.json());
 
-const deepseekApiKey = process.env.DEEPSEEK_API_KEY;
+// Configuración de DeepSeek API
+const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 
-// 🎯 PERSONALIDAD DEL VENDEDOR AMERICANSTORE
-const VENDEDOR_PERSONALIDAD = `
-Eres un vendedor experto, entusiasta y profesional de American Store Online con estas características:
+// Memoria de conversaciones (en producción usar una base de datos)
+const conversations = new Map();
 
-- **Entusiasta pero no agresivo** - Genuinamente emocionado por ayudar
-- **Conocedor de productos** - Experto en cada artículo que vendes  
-- **Orientado a soluciones** - Encuentras el producto perfecto para cada cliente
-- **Creador de urgencia** - Sin presionar, generas interés genuino
-- **Seguidor de procesos** - Guías al cliente paso a paso hacia la compra
-
-## TÉCNICAS QUE USAS:
-
-**APERTURA:**
-- "¡Perfecto! Te tengo la opción ideal..."
-- "Excelente elección, ese es uno de nuestros favoritos..."
-- "¡Qué bueno que preguntes! Justamente tenemos..."
-
-**CREACIÓN DE VALOR:**
-- "Este producto es especial porque..."
-- "La diferencia que vas a notar es..."
-- "Nuestros clientes nos dicen que..."
-
-**CREACIÓN DE URGENCIA:**
-- "Justo ahora tenemos disponibilidad..."
-- "Es uno de los que más se está vendiendo..."
-- "Aprovecha que tenemos stock..."
-
-**CIERRE:**
-- "¿Te gustaría que te reserve uno?"
-- "¿En qué talla lo necesitas?"
-- "¿Cuándo te gustaría recibirlo?"
-- "¿A qué ciudad te lo enviamos?"
-
-IMPORTANTE: Siempre termina con una llamada a la acción clara para WhatsApp.
-`;
-
-// 🚀 FUNCIÓN DEEPSEEK MEJORADA CON MÁS CONTEXTO
-async function getSmartResponse(query, parameters = {}, dialogflowContext = '') {
-  if (deepseekApiKey && deepseekApiKey.startsWith('sk-')) {
+// Función para llamar a DeepSeek API
+async function callDeepSeekAPI(messages, options = {}) {
     try {
-      console.log('🤖 Calling Deepseek with vendor personality...');
-      console.log('📊 Parameters received:', JSON.stringify(parameters));
-      console.log('🔄 Dialogflow context:', dialogflowContext);
-      
-      // Construir contexto enriquecido
-      const parametersInfo = Object.keys(parameters).length > 0 
-        ? `Información detectada por Dialogflow: ${JSON.stringify(parameters)}. ` 
-        : '';
-      
-      const contextInfo = dialogflowContext 
-        ? `Contexto de conversación: ${dialogflowContext}. ` 
-        : '';
-      
-      const fullSystemPrompt = `${VENDEDOR_PERSONALIDAD}
+        const response = await axios.post(DEEPSEEK_API_URL, {
+            model: options.model || 'deepseek-chat',
+            messages: messages,
+            max_tokens: options.max_tokens || 2000,
+            temperature: options.temperature || 0.7,
+            stream: false,
+            response_format: options.response_format || { type: 'text' }
+        }, {
+            headers: {
+                'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
 
-${parametersInfo}${contextInfo}
-
-Usa toda esta información para responder como el vendedor experto de AmericanStore que eres. Aplica tu personalidad de vendedor a la información que te proporciona Dialogflow. Máximo 50 palabras.`;
-
-      const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
-        model: "deepseek-chat",
-        messages: [
-          {
-            role: "system",
-            content: fullSystemPrompt
-          },
-          {
-            role: "user", 
-            content: query
-          }
-        ],
-        max_tokens: 100,
-        temperature: 0.4,
-        top_p: 0.9
-      }, {
-        headers: {
-          'Authorization': `Bearer ${deepseekApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 5000
-      });
-      
-      const deepseekResult = response.data.choices[0].message.content.trim();
-      console.log('✅ Deepseek response with personality success:', deepseekResult);
-      return deepseekResult;
-      
+        return response.data;
     } catch (error) {
-      console.log('⚡ Deepseek failed:', error.response?.status || error.message);
-      console.log('📚 Using fallback response');
+        console.error('Error calling DeepSeek API:', error.response?.data || error.message);
+        throw error;
     }
-  } else {
-    console.log('⚠️ DeepSeek not configured, using fallback');
-  }
-  
-  // Fallback genérico con personalidad (Dialogflow maneja el conocimiento)
-  return "¡Perfecto! Te tengo la opción ideal en AmericanStore. ¿Qué tipo de fragancia buscas? 💬 Escríbenos al WhatsApp para ayudarte mejor";
 }
 
-// 🎯 WEBHOOK PRINCIPAL MEJORADO
+// Endpoint para webhook de Dialogflow
 app.post('/webhook', async (req, res) => {
-  console.log('\n🚀 === WEBHOOK RECEIVED ===');
-  console.log('📝 Query:', req.body.queryResult?.queryText);
-  console.log('🎯 Intent:', req.body.queryResult?.intent?.displayName);
-  console.log('📊 Parameters:', JSON.stringify(req.body.queryResult?.parameters));
-  console.log('🕐 Timestamp:', new Date().toISOString());
-  
-  try {
-    const agent = new WebhookClient({ request: req, response: res });
-    
-    async function handleIntent(agent) {
-      console.log('🎭 Processing with vendor personality');
-      const query = agent.query;
-      const parameters = agent.parameters || {};
-      const contexts = agent.contexts || [];
-      
-      // Extraer información de contexto de Dialogflow
-      const contextInfo = contexts.map(c => `${c.name}: ${JSON.stringify(c.parameters)}`).join(', ');
-      
-      console.log('🧠 Applying personality layer...');
-      const responseText = await getSmartResponse(query, parameters, contextInfo);
-      agent.add(responseText);
-      
-      console.log('✅ Response sent with personality:', responseText);
+    try {
+        const { queryText, sessionId, parameters, intentDisplayName } = req.body;
+        const userId = sessionId || 'anonymous';
+        
+        // Obtener historial de conversación
+        if (!conversations.has(userId)) {
+            conversations.set(userId, [
+                {
+                    role: 'system',
+                    content: 'Eres un asistente útil y amigable. Responde de manera clara y concisa.'
+                }
+            ]);
+        }
+        
+        const conversationHistory = conversations.get(userId);
+        
+        // Agregar mensaje del usuario
+        conversationHistory.push({
+            role: 'user',
+            content: queryText
+        });
+        
+        // Configurar opciones basadas en el intent
+        const options = getOptionsForIntent(intentDisplayName, parameters);
+        
+        // Llamar a DeepSeek
+        const deepseekResponse = await callDeepSeekAPI(conversationHistory, options);
+        const assistantMessage = deepseekResponse.choices[0].message.content;
+        
+        // Agregar respuesta al historial
+        conversationHistory.push({
+            role: 'assistant',
+            content: assistantMessage
+        });
+        
+        // Mantener solo las últimas 10 interacciones para evitar exceder límites
+        if (conversationHistory.length > 21) { // 1 system + 20 mensajes
+            conversationHistory.splice(1, 2); // Remover el par más antiguo user/assistant
+        }
+        
+        // Respuesta para Dialogflow
+        const fulfillmentResponse = {
+            fulfillmentText: assistantMessage,
+            fulfillmentMessages: [
+                {
+                    text: {
+                        text: [assistantMessage]
+                    }
+                }
+            ],
+            payload: {
+                deepseek: {
+                    model: deepseekResponse.model,
+                    usage: deepseekResponse.usage,
+                    reasoning: deepseekResponse.choices[0].message.reasoning_content
+                }
+            }
+        };
+        
+        res.json(fulfillmentResponse);
+        
+    } catch (error) {
+        console.error('Webhook error:', error);
+        res.json({
+            fulfillmentText: 'Lo siento, hubo un error al procesar tu solicitud. Por favor intenta nuevamente.',
+            fulfillmentMessages: [
+                {
+                    text: {
+                        text: ['Lo siento, hubo un error al procesar tu solicitud. Por favor intenta nuevamente.']
+                    }
+                }
+            ]
+        });
     }
-    
-    // MAPEO MEJORADO: Maneja TODOS los intents automáticamente
-    let intentMap = new Map();
-    const intentName = req.body.queryResult?.intent?.displayName || 'Default Fallback Intent';
-    
-    // Lista de intents comunes - puedes agregar más según necesites
-    const commonIntents = [
-      'Default Welcome Intent',
-      'Default Fallback Intent',
-      'Perfumes_Consulta_General',
-      'Productos_Consulta',
-      'Precios_Consulta',
-      'Disponibilidad_Consulta'
-    ];
-    
-    // Mapear intents conocidos
-    commonIntents.forEach(intent => {
-      intentMap.set(intent, handleIntent);
-    });
-    
-    // Auto-mapear ANY intent que no esté en la lista (esto es clave)
-    if (!intentMap.has(intentName)) {
-      console.log(`🔄 Auto-mapping new intent: ${intentName}`);
-      intentMap.set(intentName, handleIntent);
-    }
-
-    await agent.handleRequest(intentMap);
-
-  } catch (error) {
-    console.error('❌ Webhook error:', error.message);
-    console.error('📊 Full error:', error);
-    
-    const fallbackResponse = "¡Hola! Soy tu experto en AmericanStore. Tenemos las mejores fragancias originales. ¿Qué perfume buscas? 💬 Escríbenos al WhatsApp";
-    
-    res.json({ 
-      fulfillmentText: fallbackResponse,
-      fulfillmentMessages: [{ text: { text: [fallbackResponse] } }]
-    });
-  }
 });
 
-// 🏥 HEALTH CHECK MEJORADO
+// Función para configurar opciones según el intent
+function getOptionsForIntent(intentName, parameters) {
+    const options = {};
+    
+    switch (intentName) {
+        case 'reasoning.task':
+            options.model = 'deepseek-reasoner';
+            options.temperature = 0.3;
+            break;
+        case 'creative.writing':
+            options.temperature = 0.9;
+            options.max_tokens = 3000;
+            break;
+        case 'json.response':
+            options.response_format = { type: 'json_object' };
+            options.temperature = 0.2;
+            break;
+        case 'technical.help':
+            options.temperature = 0.1;
+            options.max_tokens = 4000;
+            break;
+        default:
+            options.temperature = 0.7;
+            options.max_tokens = 2000;
+    }
+    
+    return options;
+}
+
+// Endpoint para limpiar conversación
+app.post('/clear-conversation', (req, res) => {
+    const { sessionId } = req.body;
+    if (sessionId && conversations.has(sessionId)) {
+        conversations.delete(sessionId);
+        res.json({ message: 'Conversación eliminada' });
+    } else {
+        res.status(404).json({ message: 'Sesión no encontrada' });
+    }
+});
+
+// Endpoint de salud
 app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    service: 'AmericanStore Smart Webhook v3.1',
-    architecture: 'Hybrid - Dialogflow KB + Server Personality',
-    personality: {
-      active: true,
-      type: 'Expert Vendor',
-      techniques: ['Opening', 'Value Creation', 'Urgency', 'Closing']
-    },
-    deepseek: {
-      configured: !!deepseekApiKey,
-      valid: deepseekApiKey ? deepseekApiKey.startsWith('sk-') : false,
-      model: 'deepseek-chat'
-    },
-    features: [
-      'Vendor Personality Integrated', 
-      'Sales Techniques Active',
-      'DeepSeek AI Enhancement',
-      'Smart Fallback System',
-      'Auto Intent Mapping',
-      'Context Awareness'
-    ],
-    knowledge_base: 'Dialogflow Knowledge Base',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// 🧪 ENDPOINT DE PRUEBA MEJORADO
-app.get('/test', async (req, res) => {
-  const testQuery = req.query.q || "Hola, busco un perfume para hombre";
-  const testParams = req.query.params ? JSON.parse(req.query.params) : {};
-  
-  try {
-    const response = await getSmartResponse(testQuery, testParams, 'Test Context');
-    res.json({
-      query: testQuery,
-      parameters: testParams,
-      response: response,
-      personality: 'Expert Vendor Active',
-      architecture: 'Dialogflow KB + Server Personality',
-      timestamp: new Date().toISOString()
+    res.json({ 
+        status: 'OK', 
+        timestamp: new Date().toISOString(),
+        conversations: conversations.size
     });
-  } catch (error) {
-    res.json({
-      error: error.message,
-      query: testQuery,
-      personality: 'Fallback Active'
-    });
-  }
 });
 
-// 📊 NUEVO: Endpoint para ver la personalidad
-app.get('/personality', (req, res) => {
-  res.json({
-    personality: VENDEDOR_PERSONALIDAD,
-    active: true,
-    version: '3.1'
-  });
-});
-
-app.get('/', (req, res) => {
-  res.json({
-    message: 'AmericanStore Smart Webhook v3.1 - Expert Vendor Personality',
-    architecture: 'Hybrid: Dialogflow Knowledge Base + Server Personality',
-    personality: 'Active - Expert Vendor',
-    endpoints: {
-      webhook: '/webhook',
-      health: '/health', 
-      test: '/test?q=tu_pregunta',
-      personality: '/personality'
+// Endpoint para streaming (opcional)
+app.post('/stream', async (req, res) => {
+    try {
+        const { messages, options } = req.body;
+        
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        
+        const streamResponse = await axios.post(DEEPSEEK_API_URL, {
+            model: options?.model || 'deepseek-chat',
+            messages: messages,
+            stream: true,
+            max_tokens: options?.max_tokens || 2000,
+            temperature: options?.temperature || 0.7
+        }, {
+            headers: {
+                'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            responseType: 'stream'
+        });
+        
+        streamResponse.data.on('data', (chunk) => {
+            const lines = chunk.toString().split('\n');
+            for (const line of lines) {
+                if (line.startsWith('data: ') && !line.includes('[DONE]')) {
+                    res.write(line + '\n\n');
+                }
+            }
+        });
+        
+        streamResponse.data.on('end', () => {
+            res.write('data: [DONE]\n\n');
+            res.end();
+        });
+        
+    } catch (error) {
+        console.error('Streaming error:', error);
+        res.status(500).json({ error: 'Error en streaming' });
     }
-  });
 });
 
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log(`\n🚀 AmericanStore Smart Webhook v3.1 running on port ${PORT}`);
-  console.log(`🏗️  Architecture: Hybrid (Dialogflow KB + Server Personality)`);
-  console.log(`🎭 Vendor Personality: ACTIVE`);
-  console.log(`🤖 Deepseek Integration: ${deepseekApiKey ? 'CONFIGURED' : 'NOT CONFIGURED'}`);
-  console.log(`🧠 Knowledge Base: Dialogflow (recommended)`);
-  console.log(`💼 Ready to sell with expert techniques!`);
-  console.log(`\n🔗 Test it: http://localhost:${PORT}/test?q=busco%20un%20perfume`);
+// Manejo de errores global
+app.use((err, req, res, next) => {
+    console.error('Error global:', err);
+    res.status(500).json({ 
+        error: 'Error interno del servidor',
+        message: process.env.NODE_ENV === 'development' ? err.message : 'Error interno'
+    });
 });
+
+app.listen(PORT, () => {
+    console.log(`🚀 Servidor ejecutándose en puerto ${PORT}`);
+    console.log(`📋 Webhook URL: https://tu-app.render.com/webhook`);
+    console.log(`🔗 Health check: https://tu-app.render.com/health`);
+});
+
+module.exports = app;
