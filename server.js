@@ -95,7 +95,7 @@ async function callDeepSeek(userMessage, sessionId = 'default') {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             },
-            timeout: 30000, // Aumentado a 30 segundos
+            timeout: 3000, // Aumentado a 3 segundos
             validateStatus: function (status) {
                 return status >= 200 && status < 500; // No rechazar en 4xx
             }
@@ -357,3 +357,4 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
+
