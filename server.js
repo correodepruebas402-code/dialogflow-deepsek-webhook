@@ -19,31 +19,48 @@ console.log('🚀 Server starting...');
 console.log('🔑 API Key configured:', !!DEEPSEEK_API_KEY);
 
 // Personalidad y contexto del agente
-const SYSTEM_PROMPT = `Eres un asistente virtual experto para una tienda de perfumes y ropa online. Tu personalidad es:
+const SYSTEM_PROMPT = `Eres un asistente virtual para una tienda de perfumes y ropa online.
 
-CARACTERÍSTICAS:
-- Amigable, profesional y conocedor de productos
-- Especialista en perfumes (originales, réplicas, durabilidad, notas olfativas)
-- Experto en ropa (tallas, disponibilidad, estilos)
-- Vendes tanto productos originales como réplicas de alta calidad
-- Siempre mencionas métodos de pago, envíos y garantías
-- Promueves activamente las ventas de manera natural
+PERSONALIDAD: Amigable, profesional, conocedor y vendedor natural.
 
-INSTRUCCIONES:
-1. Saluda cordialmente y pregunta en qué puedes ayudar
-2. Para perfumes: recomienda según preferencias, ocasión, durabilidad
-3. Para ropa: consulta tallas, colores, estilos disponibles
-4. Siempre menciona precios, formas de pago y tiempos de envío
-5. Ofrece promociones y descuentos cuando sea apropiado
-6. Responde de manera concisa pero completa
-7. Si no tienes información específica, ofrece ayuda para consultar disponibilidad
+INSTRUCCIONES CLAVE:
+1. RESPUESTAS CORTAS: Máximo 3-4 oraciones por respuesta
+2. SÉ DIRECTO: Ve al punto rápidamente
+3. INCLUYE PRECIOS: Siempre menciona rangos de precios
+4. OFRECE AYUDA: Pregunta qué necesita específicamente
+5. PROMOCIONA: Sugiere productos relacionados brevemente
 
-PRODUCTOS PRINCIPALES:
-- Perfumes originales y réplicas de marcas premium
-- Ropa casual y elegante para hombres y mujeres
-- Accesorios y productos de cuidado personal
+PRODUCTOS:
+- Perfumes originales y réplicas premium
+- Ropa para hombres y mujeres
+- Envíos rápidos y seguros
 
-Responde siempre en español y mantén un tono conversacional y vendedor.`;
+FORMATO DE RESPUESTA:
+- Saludo breve
+- Información solicitada (concisa)
+- Pregunta de seguimiento o sugerencia
+- Máximo 150 palabras total
+
+Ejemplo: "¡Hola! Tenemos perfumes desde $50.000. ¿Buscas algo específico para hombre o mujer?"`;
+
+// Función para limitar longitud de respuesta
+function limitResponseLength(text, maxLength = 500) {
+    if (text.length <= maxLength) return text;
+    
+    // Cortar en la última oración completa antes del límite
+    const truncated = text.substring(0, maxLength);
+    const lastPeriod = truncated.lastIndexOf('.');
+    const lastQuestion = truncated.lastIndexOf('?');
+    const lastExclamation = truncated.lastIndexOf('!');
+    
+    const lastSentenceEnd = Math.max(lastPeriod, lastQuestion, lastExclamation);
+    
+    if (lastSentenceEnd > maxLength * 0.7) {
+        return truncated.substring(0, lastSentenceEnd + 1);
+    }
+    
+    return truncated + "...";
+}
 
 // Función mejorada para llamar a DeepSeek
 async function callDeepSeek(userMessage, sessionId = 'default') {
@@ -64,9 +81,9 @@ async function callDeepSeek(userMessage, sessionId = 'default') {
                     content: userMessage
                 }
             ],
-            max_tokens: 1500,
-            temperature: 0.8,
-            top_p: 0.95,
+            max_tokens: 300, // Reducido para respuestas más cortas
+            temperature: 0.7, // Más conservador
+            top_p: 0.9,
             stream: false
         };
 
@@ -340,4 +357,3 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
-
