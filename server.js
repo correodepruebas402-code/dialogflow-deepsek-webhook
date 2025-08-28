@@ -30,19 +30,40 @@ async function callDeepSeekAPI(messages, options = {}) {
         };
 
         console.log(`Calling DeepSeek API with model: ${requestConfig.model}`);
+        console.log('Request config:', JSON.stringify(requestConfig, null, 2));
+        console.log('API Key present:', !!DEEPSEEK_API_KEY);
+        console.log('API Key length:', DEEPSEEK_API_KEY ? DEEPSEEK_API_KEY.length : 'undefined');
         
         const response = await axios.post(DEEPSEEK_API_URL, requestConfig, {
             headers: {
                 'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'User-Agent': 'dialogflow-deepseek-integration/1.0'
             },
-            timeout: 4000 // Timeout de 4 segundos para dejar margen a Dialogflow
+            timeout: 4000, // Timeout de 4 segundos para dejar margen a Dialogflow
+            validateStatus: function (status) {
+                return status >= 200 && status < 500; // No rechazar para códigos de error HTTP
+            }
         });
 
+        console.log(`DeepSeek API response status: ${response.status}`);
+        console.log(`DeepSeek API response headers:`, response.headers);
+        
+        if (response.status !== 200) {
+            console.error('DeepSeek API error response:', response.status, response.data);
+            throw new Error(`DeepSeek API returned status ${response.status}: ${JSON.stringify(response.data)}`);
+        }
+        
         console.log(`DeepSeek API response received, tokens: ${response.data.usage?.total_tokens}`);
         return response.data;
+        
     } catch (error) {
-        console.error('Error calling DeepSeek API:', error.response?.data || error.message);
+        console.error('Error calling DeepSeek API:');
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        console.error('Error response status:', error.response?.status);
+        console.error('Error response data:', error.response?.data);
+        console.error('Full error:', error);
         
         if (error.code === 'ECONNABORTED') {
             console.log('Request timed out, using fallback response');
@@ -58,7 +79,46 @@ async function callDeepSeekAPI(messages, options = {}) {
                 usage: { total_tokens: 0, prompt_tokens: 0, completion_tokens: 0 }
             };
         }
-        throw error;
+        
+        if (error.response?.status === 401) {
+            console.error('API Key authentication failed');
+            return {
+                choices: [{
+                    message: {
+                        content: "Error de autenticación. Por favor verifica la configuración del servidor.",
+                        role: "assistant"
+                    }
+                }],
+                model: requestConfig.model,
+                usage: { total_tokens: 0, prompt_tokens: 0, completion_tokens: 0 }
+            };
+        }
+        
+        if (error.response?.status === 429) {
+            console.error('Rate limit exceeded');
+            return {
+                choices: [{
+                    message: {
+                        content: "El servicio está temporalmente ocupado. Por favor intenta en unos momentos.",
+                        role: "assistant"
+                    }
+                }],
+                model: requestConfig.model,
+                usage: { total_tokens: 0, prompt_tokens: 0, completion_tokens: 0 }
+            };
+        }
+        
+        // Respuesta de fallback para cualquier otro error
+        return {
+            choices: [{
+                message: {
+                    content: "Disculpa, hubo un problema técnico temporal. ¿Podrías intentar nuevamente?",
+                    role: "assistant"
+                }
+            }],
+            model: requestConfig.model,
+            usage: { total_tokens: 0, prompt_tokens: 0, completion_tokens: 0 }
+        };
     }
 }
 
